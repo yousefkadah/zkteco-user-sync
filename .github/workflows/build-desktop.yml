@@ -1,0 +1,81 @@
+name: Build desktop installers
+
+# Builds direct-download installers for all three OSes on their native runners:
+#   Windows -> NSIS setup .exe   (the Microsoft Store MSIX is build-msix.yml)
+#   macOS   -> .dmg
+#   Linux   -> .AppImage + .deb
+# Artifacts are unsigned. For signed/notarized releases set the signing secrets
+# (see PUBLISHING.md). Run from Actions -> Run workflow, or push a v* tag.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: win
+            arch: x64
+            artifact: windows-exe
+          - os: macos-latest
+            target: mac
+            arch: arm64
+            artifact: macos-dmg
+          - os: ubuntu-latest
+            target: linux
+            arch: x64
+            artifact: linux-appimage-deb
+    runs-on: ${{ matrix.os }}
+    env:
+      NODE_OPTIONS: --max-old-space-size=8192
+      # Build unsigned; add signing secrets later for release builds.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: zip, intl, sockets, fileinfo, mbstring, curl, openssl, gd, exif, pdo_sqlite
+          tools: composer
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress --optimize-autoloader
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Build front-end assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Linux packaging deps
+        if: matrix.target == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libarchive-tools rpm fakeroot
+
+      - name: Build ${{ matrix.target }} (${{ matrix.arch }})
+        run: php artisan native:build ${{ matrix.target }} ${{ matrix.arch }} --no-interaction
+
+      - name: Collect installers
+        shell: bash
+        run: |
+          mkdir -p artifact
+          find . -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) \
+            -not -path '*/node_modules/*' -exec cp {} artifact/ \; 2>/dev/null || true
+          ls -la artifact
+          if [ -z "$(ls -A artifact 2>/dev/null)" ]; then echo 'No installer produced'; exit 1; fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: artifact/*
+          if-no-files-found: error

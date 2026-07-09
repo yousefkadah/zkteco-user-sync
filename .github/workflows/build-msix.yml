@@ -1,0 +1,89 @@
+name: Build MSIX (Microsoft Store)
+
+# Produces an unsigned .msix you download from the run's Artifacts and upload to
+# Partner Center (the Store re-signs it). Runs on Windows because MSIX packaging
+# (makeappx.exe) is Windows-only.
+#
+# Before the first run, set three repo Variables (Settings → Secrets and
+# variables → Actions → Variables) from Partner Center → Product → Product
+# identity:
+#   MSIX_IDENTITY_NAME            (Package/Identity Name)
+#   MSIX_PUBLISHER               (Publisher, e.g. CN=XXXXXXXX-....)
+#   MSIX_PUBLISHER_DISPLAY_NAME  (Publisher display name)
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  msix:
+    runs-on: windows-latest
+    env:
+      NODE_OPTIONS: --max-old-space-size=8192
+      # Never auto-discover a signing cert — we want an UNSIGNED package for the Store.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
+      MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+      MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.MSIX_PUBLISHER_DISPLAY_NAME }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # php-bin ships win-x64 static binaries for 8.3; the packaged app runs on
+      # that bundled runtime. All app deps support ^8.3.
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: zip, intl, sockets, fileinfo, mbstring, curl, openssl, gd, exif, pdo_sqlite
+          tools: composer
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress --optimize-autoloader
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Build front-end assets
+        run: |
+          npm ci
+          npm run build
+
+      # Swap NativePHP's NSIS config for our full-trust appx (MSIX) config.
+      - name: Apply MSIX build config
+        shell: pwsh
+        run: |
+          Copy-Item build/msix/electron-builder.appx.mjs `
+            vendor/nativephp/desktop/resources/electron/electron-builder.mjs -Force
+
+      # Make sure makeappx.exe (Windows SDK) is reachable if electron-builder can't find it.
+      - name: Ensure Windows SDK on PATH
+        shell: pwsh
+        run: |
+          $sdk = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Directory `
+            | Where-Object { Test-Path (Join-Path $_.FullName 'x64\makeappx.exe') } `
+            | Sort-Object Name -Descending | Select-Object -First 1
+          if ($sdk) { Add-Content $env:GITHUB_PATH (Join-Path $sdk.FullName 'x64') }
+
+      - name: Build MSIX
+        run: php artisan native:build win --no-interaction
+
+      - name: Collect MSIX
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifact | Out-Null
+          $files = Get-ChildItem -Recurse -Include *.msix, *.appx -ErrorAction SilentlyContinue
+          if (-not $files) { Write-Error 'No .msix/.appx was produced — check the build log above.'; exit 1 }
+          $files | ForEach-Object { Copy-Item $_.FullName artifact/ }
+          Get-ChildItem artifact
+
+      - name: Upload MSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-msix
+          path: artifact/*
+          if-no-files-found: error
