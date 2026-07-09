@@ -15,6 +15,7 @@ Route::delete('/import/{batch}', [ImportController::class, 'destroy'])->name('im
 Route::post('/import/{batch}/sync', [SyncController::class, 'store'])->name('import.sync');
 
 Route::get('/devices', [DeviceController::class, 'index'])->name('devices.index');
+Route::get('/devices/scan', [DeviceController::class, 'scan'])->name('devices.scan');
 Route::post('/devices', [DeviceController::class, 'store'])->name('devices.store');
 Route::put('/devices/{device}', [DeviceController::class, 'update'])->name('devices.update');
 Route::delete('/devices/{device}', [DeviceController::class, 'destroy'])->name('devices.destroy');

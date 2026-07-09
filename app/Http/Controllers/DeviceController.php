@@ -7,7 +7,9 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreDeviceRequest;
 use App\Http\Requests\UpdateDeviceRequest;
 use App\Models\Device;
+use App\Services\Zkteco\DeviceDiscoveryScanner;
 use App\Services\Zkteco\ZktecoDeviceService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -62,6 +64,23 @@ class DeviceController extends Controller
         $device->delete();
 
         return back()->with('success', 'Device removed.');
+    }
+
+    public function scan(DeviceDiscoveryScanner $scanner): JsonResponse
+    {
+        $known = Device::pluck('id', 'ip_address');
+
+        $devices = array_map(fn (array $found): array => [
+            'ip_address' => $found['ip'],
+            'serial_number' => $found['serial'],
+            'name' => $found['name'],
+            'firmware' => $found['firmware'],
+            'already_added' => $known->has($found['ip']),
+            'suggested_name' => $found['name']
+                ?: ($found['serial'] ? 'ZKTeco '.$found['serial'] : 'ZKTeco '.$found['ip']),
+        ], $scanner->scan());
+
+        return response()->json(['devices' => $devices]);
     }
 
     public function test(Device $device, ZktecoDeviceService $service): RedirectResponse

@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { Head, router } from '@inertiajs/react';
-import { Plus } from 'lucide-react';
+import { Check, Loader2, Plus, Wifi } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -29,6 +29,15 @@ interface DeviceForm {
     notes: string;
 }
 
+interface DiscoveredDevice {
+    ip_address: string;
+    serial_number: string | null;
+    name: string | null;
+    firmware: string | null;
+    already_added: boolean;
+    suggested_name: string;
+}
+
 const EMPTY_FORM: DeviceForm = { name: '', ip_address: '', port: 4370, comm_key: '', notes: '' };
 
 export default function DevicesIndex({ devices }: Props) {
@@ -38,6 +47,10 @@ export default function DevicesIndex({ devices }: Props) {
     const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [form, setForm] = useState<DeviceForm>(EMPTY_FORM);
+    const [scanning, setScanning] = useState(false);
+    const [scanned, setScanned] = useState(false);
+    const [scanError, setScanError] = useState<string | null>(null);
+    const [discovered, setDiscovered] = useState<DiscoveredDevice[]>([]);
 
     const set = <K extends keyof DeviceForm>(key: K, value: DeviceForm[K]) =>
         setForm((current) => ({ ...current, [key]: value }));
@@ -96,6 +109,50 @@ export default function DevicesIndex({ devices }: Props) {
         });
     };
 
+    const scan = async () => {
+        setScanning(true);
+        setScanError(null);
+
+        try {
+            const response = await fetch('/devices/scan', { headers: { Accept: 'application/json' } });
+
+            if (!response.ok) {
+                throw new Error('Scan request failed');
+            }
+
+            const data = await response.json();
+            setDiscovered(data.devices ?? []);
+            setScanned(true);
+        } catch {
+            setScanError('Network scan failed. Make sure this machine is on the same network as the devices.');
+        } finally {
+            setScanning(false);
+        }
+    };
+
+    const addDiscovered = (device: DiscoveredDevice) => {
+        router.post(
+            '/devices',
+            { name: device.suggested_name, ip_address: device.ip_address, port: 4370 },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setDiscovered((list) =>
+                        list.map((item) =>
+                            item.ip_address === device.ip_address ? { ...item, already_added: true } : item,
+                        ),
+                    );
+                },
+            },
+        );
+    };
+
+    const dismissScan = () => {
+        setScanned(false);
+        setScanError(null);
+        setDiscovered([]);
+    };
+
     const formatDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : 'Never');
 
     return (
@@ -109,11 +166,79 @@ export default function DevicesIndex({ devices }: Props) {
                         ZKTeco terminals reachable on your local network (default port 4370).
                     </p>
                 </div>
-                <Button onClick={openCreate}>
-                    <Plus className="size-4" />
-                    Add device
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={scan} disabled={scanning}>
+                        {scanning ? <Loader2 className="size-4 animate-spin" /> : <Wifi className="size-4" />}
+                        {scanning ? 'Scanning…' : 'Scan network'}
+                    </Button>
+                    <Button onClick={openCreate}>
+                        <Plus className="size-4" />
+                        Add device
+                    </Button>
+                </div>
             </header>
+
+            {(scanning || scanned || scanError) && (
+                <Card className="mb-6 p-5">
+                    <div className="mb-3 flex items-center justify-between">
+                        <h2 className="text-sm font-semibold">Discovered on your network</h2>
+                        {!scanning && (
+                            <button
+                                type="button"
+                                className="text-xs text-muted-foreground hover:text-foreground"
+                                onClick={dismissScan}
+                            >
+                                Dismiss
+                            </button>
+                        )}
+                    </div>
+
+                    {scanning && (
+                        <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
+                            <Loader2 className="size-4 animate-spin" />
+                            Scanning your local network on UDP port 4370…
+                        </div>
+                    )}
+
+                    {!scanning && scanError && <p className="py-2 text-sm text-destructive">{scanError}</p>}
+
+                    {!scanning && !scanError && scanned && discovered.length === 0 && (
+                        <p className="py-2 text-sm text-muted-foreground">
+                            No ZKTeco devices found. Check that a terminal is powered on and on this network.
+                        </p>
+                    )}
+
+                    {!scanning && discovered.length > 0 && (
+                        <ul className="divide-y">
+                            {discovered.map((device) => (
+                                <li key={device.ip_address} className="flex items-center justify-between gap-4 py-3">
+                                    <div className="min-w-0">
+                                        <p className="font-mono text-sm">{device.ip_address}</p>
+                                        <p className="truncate text-xs text-muted-foreground">
+                                            {[
+                                                device.name,
+                                                device.serial_number ? `S/N ${device.serial_number}` : null,
+                                                device.firmware,
+                                            ]
+                                                .filter(Boolean)
+                                                .join(' · ') || 'ZKTeco device'}
+                                        </p>
+                                    </div>
+                                    {device.already_added ? (
+                                        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
+                                            <Check className="size-3.5" /> Added
+                                        </span>
+                                    ) : (
+                                        <Button size="sm" onClick={() => addDiscovered(device)}>
+                                            Add
+                                        </Button>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </Card>
+            )}
 
             {devices.length === 0 ? (
                 <div className="rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">

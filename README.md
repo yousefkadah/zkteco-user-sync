@@ -13,9 +13,10 @@ Windows app while staying a normal Laravel codebase underneath.
 
 ## What it does
 
-1. **Devices** – register each terminal (name, IP, port `4370`, optional
-   communication key). "Test connection" reads the serial, firmware and current
-   user count.
+1. **Devices** – **scan the local network to auto-discover terminals** (a
+   non-blocking UDP sweep of your subnet on port 4370), or add one manually
+   (name, IP, port `4370`, optional communication key). "Test connection" reads
+   the serial, firmware and current user count.
 2. **Import** – drop in an `.xlsx`, `.xls` or `.csv`. Every row is validated
    against the device's field limits before anything is written.
 3. **Sync** – push the valid rows to the selected device with a live progress
