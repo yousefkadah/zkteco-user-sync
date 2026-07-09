@@ -14,6 +14,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { ConnectingDots } from '@/components/connecting-dots';
+import { ScanRadar } from '@/components/scan-radar';
 import { cn } from '@/lib/utils';
 import type { Device } from '@/types';
 
@@ -193,12 +195,7 @@ export default function DevicesIndex({ devices }: Props) {
                         )}
                     </div>
 
-                    {scanning && (
-                        <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
-                            <Loader2 className="size-4 animate-spin" />
-                            Scanning your local network on UDP port 4370…
-                        </div>
-                    )}
+                    {scanning && <ScanRadar />}
 
                     {!scanning && scanError && <p className="py-2 text-sm text-destructive">{scanError}</p>}
 
@@ -211,7 +208,10 @@ export default function DevicesIndex({ devices }: Props) {
                     {!scanning && discovered.length > 0 && (
                         <ul className="divide-y">
                             {discovered.map((device) => (
-                                <li key={device.ip_address} className="flex items-center justify-between gap-4 py-3">
+                                <li
+                                    key={device.ip_address}
+                                    className="flex animate-in fade-in-0 slide-in-from-top-1 items-center justify-between gap-4 py-3 duration-300"
+                                >
                                     <div className="min-w-0">
                                         <p className="font-mono text-sm">{device.ip_address}</p>
                                         <p className="truncate text-xs text-muted-foreground">
@@ -247,7 +247,13 @@ export default function DevicesIndex({ devices }: Props) {
             ) : (
                 <div className="grid gap-4 sm:grid-cols-2">
                     {devices.map((device) => (
-                        <Card key={device.id} className="p-5">
+                        <Card
+                            key={device.id}
+                            className={cn(
+                                'animate-in fade-in-0 slide-in-from-bottom-2 p-5 transition-shadow duration-500',
+                                testingId === device.id && 'ring-2 ring-primary/40',
+                            )}
+                        >
                             <div className="flex items-start justify-between">
                                 <div>
                                     <h3 className="text-base font-semibold">{device.name}</h3>
@@ -255,22 +261,32 @@ export default function DevicesIndex({ devices }: Props) {
                                         {device.ip_address}:{device.port}
                                     </p>
                                 </div>
-                                <span
-                                    className={cn(
-                                        'inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium',
-                                        device.last_connection_ok
-                                            ? 'bg-emerald-100 text-emerald-700'
-                                            : 'bg-muted text-muted-foreground',
-                                    )}
-                                >
+                                {testingId === device.id ? (
+                                    <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                                        <span className="relative flex size-1.5">
+                                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary opacity-75" />
+                                            <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
+                                        </span>
+                                        Connecting
+                                    </span>
+                                ) : (
                                     <span
                                         className={cn(
-                                            'size-1.5 rounded-full',
-                                            device.last_connection_ok ? 'bg-emerald-500' : 'bg-muted-foreground',
+                                            'inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium',
+                                            device.last_connection_ok
+                                                ? 'bg-emerald-100 text-emerald-700'
+                                                : 'bg-muted text-muted-foreground',
                                         )}
-                                    />
-                                    {device.last_connection_ok ? 'Online' : 'Unknown'}
-                                </span>
+                                    >
+                                        <span
+                                            className={cn(
+                                                'size-1.5 rounded-full',
+                                                device.last_connection_ok ? 'bg-emerald-500' : 'bg-muted-foreground',
+                                            )}
+                                        />
+                                        {device.last_connection_ok ? 'Online' : 'Unknown'}
+                                    </span>
+                                )}
                             </div>
 
                             <dl className="mt-4 space-y-1 text-sm">
@@ -300,7 +316,13 @@ export default function DevicesIndex({ devices }: Props) {
                                     disabled={testingId === device.id}
                                     onClick={() => test(device)}
                                 >
-                                    {testingId === device.id ? 'Testing…' : 'Test connection'}
+                                    {testingId === device.id ? (
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <ConnectingDots /> Connecting
+                                        </span>
+                                    ) : (
+                                        'Test connection'
+                                    )}
                                 </Button>
                                 <Button variant="outline" size="icon" onClick={() => openEdit(device)} title="Edit">
                                     <Pencil className="size-4" />

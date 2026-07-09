@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Cpu, MonitorSmartphone, RefreshCw } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DataStream } from '@/components/data-stream';
 import { cn } from '@/lib/utils';
 
 interface DeviceUser {
@@ -53,6 +54,15 @@ export default function DevicesUsers({ device, result }: Props) {
                     </Button>
                 </div>
             </div>
+
+            {refreshing && (
+                <div className="mb-4 flex items-center gap-3 rounded-lg border bg-secondary/40 px-4 py-2.5">
+                    <Cpu className="size-4 shrink-0 text-muted-foreground" />
+                    <DataStream direction="to-app" active className="max-w-[140px]" />
+                    <MonitorSmartphone className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Reading users from device…</span>
+                </div>
+            )}
 
             {!result.ok ? (
                 <Card className="p-8 text-center">

@@ -4,6 +4,7 @@ import { Download, Trash2, UploadCloud } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ConnectingDots } from '@/components/connecting-dots';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatusBadge } from '@/components/status-badge';
 import type { BatchSummary, DeviceLite } from '@/types';
@@ -108,7 +109,13 @@ export default function ImportIndex({ batches, devices }: Props) {
                         <div className="mt-4 flex items-center justify-between rounded-lg bg-secondary px-4 py-3">
                             <span className="truncate text-sm">{file.name}</span>
                             <Button onClick={submit} disabled={processing}>
-                                {processing ? 'Importing…' : 'Import file'}
+                                {processing ? (
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <ConnectingDots /> Importing
+                                    </span>
+                                ) : (
+                                    'Import file'
+                                )}
                             </Button>
                         </div>
                     )}

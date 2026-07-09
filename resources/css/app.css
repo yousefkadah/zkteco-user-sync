@@ -88,35 +88,90 @@
     }
 }
 
-.sync-dot {
+/* Animated data streams — dots flowing between the app and a device. */
+.flow-dot {
     position: absolute;
     top: 50%;
-    left: 0;
     height: 0.5rem;
     width: 0.5rem;
     margin-top: -0.25rem;
     border-radius: 9999px;
     background-color: var(--primary);
-    animation: sync-dot-flow 1.6s linear infinite;
 }
 
-@keyframes sync-dot-flow {
-    0% {
-        left: -4%;
-        opacity: 0;
-        transform: scale(0.6);
-    }
-    12% {
-        opacity: 1;
-        transform: scale(1);
-    }
-    88% {
-        opacity: 1;
-        transform: scale(1);
-    }
-    100% {
-        left: 100%;
-        opacity: 0;
-        transform: scale(0.6);
+.flow-dot--to-device {
+    left: 0;
+    animation: flow-to-device 1.6s linear infinite;
+}
+
+.flow-dot--to-app {
+    right: 0;
+    animation: flow-to-app 1.6s linear infinite;
+}
+
+@keyframes flow-to-device {
+    0% { left: -4%; opacity: 0; transform: scale(0.6); }
+    12% { opacity: 1; transform: scale(1); }
+    88% { opacity: 1; transform: scale(1); }
+    100% { left: 100%; opacity: 0; transform: scale(0.6); }
+}
+
+@keyframes flow-to-app {
+    0% { right: -4%; opacity: 0; transform: scale(0.6); }
+    12% { opacity: 1; transform: scale(1); }
+    88% { opacity: 1; transform: scale(1); }
+    100% { right: 100%; opacity: 0; transform: scale(0.6); }
+}
+
+/* Radar sweep — network scan. */
+.radar-sweep {
+    background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        transparent 280deg,
+        color-mix(in oklch, var(--primary) 45%, transparent) 360deg
+    );
+    animation: radar-spin 1.4s linear infinite;
+}
+
+@keyframes radar-spin {
+    to { transform: rotate(360deg); }
+}
+
+.ping-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    border: 1px solid var(--primary);
+    opacity: 0;
+    animation: ping-ring 1.6s ease-out infinite;
+}
+
+@keyframes ping-ring {
+    0% { transform: scale(0.5); opacity: 0.5; }
+    100% { transform: scale(1.9); opacity: 0; }
+}
+
+/* Connecting dots — test connection / handshake. */
+.connect-dot {
+    display: inline-block;
+    height: 0.3rem;
+    width: 0.3rem;
+    border-radius: 9999px;
+    background-color: currentColor;
+    animation: connect-bounce 0.9s ease-in-out infinite;
+}
+
+@keyframes connect-bounce {
+    0%, 100% { opacity: 0.3; transform: translateY(0); }
+    50% { opacity: 1; transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .flow-dot,
+    .radar-sweep,
+    .ping-ring,
+    .connect-dot {
+        animation: none !important;
     }
 }

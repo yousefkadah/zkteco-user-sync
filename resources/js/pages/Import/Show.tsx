@@ -149,12 +149,12 @@ export default function ImportShow({ batch, users, devices }: Props) {
 
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 {summary.map((card) => (
-                    <Card key={card.label} className="p-4">
+                    <Card key={card.label} className="animate-in fade-in-0 p-4 duration-500">
                         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{card.label}</p>
                         <p className={cn('mt-1 text-2xl font-semibold', card.className)}>{card.value}</p>
                     </Card>
                 ))}
-                <Card className="p-4">
+                <Card className="animate-in fade-in-0 p-4 duration-500">
                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Synced</p>
                     <p className="mt-1 text-2xl font-semibold text-blue-600">
                         {batch.synced_count}

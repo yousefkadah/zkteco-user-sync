@@ -1,5 +1,6 @@
 import { Cpu, MonitorSmartphone } from 'lucide-react';
 
+import { DataStream } from '@/components/data-stream';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -45,12 +46,7 @@ export function SyncFlow({ status, total, synced, failed, deviceName }: Props) {
                 </div>
 
                 <div className="flex flex-1 flex-col justify-center">
-                    <div className="relative h-2 w-full overflow-hidden rounded-full bg-border">
-                        {isSyncing &&
-                            [0, 1, 2, 3, 4].map((i) => (
-                                <span key={i} className="sync-dot" style={{ animationDelay: `${i * 0.32}s` }} />
-                            ))}
-                    </div>
+                    <DataStream direction="to-device" active={isSyncing} />
                     <div className="mt-2 text-center text-[11px] text-muted-foreground">{pipeLabel}</div>
                 </div>
 
