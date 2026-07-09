@@ -26,7 +26,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         // so the user never loses min/max/close (safe cross-platform default).
         if (PHP_OS_FAMILY === 'Darwin') {
             $window->titleBarHiddenInset()
-                ->trafficLightPosition(16, 16);
+                ->trafficLightPosition(16, 14); // vertically centered in the 44px titlebar band
         }
 
         $window->showDockIcon();

@@ -82,7 +82,7 @@
 
     /* Density scale */
     --titlebar-h: 44px;
-    --titlebar-inset-start: 78px; /* mac traffic-light reserve; overridden to 12px elsewhere */
+    --titlebar-inset-start: 92px; /* mac traffic-light reserve (generous — clears the inset cluster); overridden to 12px elsewhere */
     --toolbar-h: 44px;
     --statusbar-h: 26px;
     --sidebar-w: 208px;

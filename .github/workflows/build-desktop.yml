@@ -12,6 +12,10 @@ on:
   push:
     tags: ['v*']
 
+# Needed so a v* tag build can publish the installers to a GitHub Release.
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -74,12 +78,22 @@ jobs:
       - name: Build ${{ matrix.target }} (${{ matrix.arch }})
         run: php artisan native:build ${{ matrix.target }} ${{ matrix.arch }} --no-interaction
 
+      # Copy each installer to a STABLE, unversioned name so the public download
+      # page (Fullness) can link to /releases/latest/download/<name> reliably.
       - name: Collect installers
         shell: bash
         run: |
           mkdir -p artifact
-          find . -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) \
-            -not -path '*/node_modules/*' -exec cp {} artifact/ \; 2>/dev/null || true
+          pick() { find . -name "$1" -not -path '*/node_modules/*' 2>/dev/null | head -1; }
+          case "${{ matrix.target }}" in
+            mac)
+              f=$(pick '*.dmg');      [ -n "$f" ] && cp "$f" "artifact/ZKTeco-User-Sync-mac-arm64.dmg" ;;
+            win)
+              f=$(pick '*.exe');      [ -n "$f" ] && cp "$f" "artifact/ZKTeco-User-Sync-win-x64.exe" ;;
+            linux)
+              a=$(pick '*.AppImage'); [ -n "$a" ] && cp "$a" "artifact/ZKTeco-User-Sync-linux-x86_64.AppImage"
+              d=$(pick '*.deb');      [ -n "$d" ] && cp "$d" "artifact/ZKTeco-User-Sync-linux-amd64.deb" ;;
+          esac
           ls -la artifact
           if [ -z "$(ls -A artifact 2>/dev/null)" ]; then echo 'No installer produced'; exit 1; fi
 
@@ -88,3 +102,12 @@ jobs:
           name: ${{ matrix.artifact }}
           path: artifact/*
           if-no-files-found: error
+
+      # On a v* tag, publish the stably-named installers to the release so the
+      # Fullness download page's /releases/latest/download/<name> links resolve.
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifact/*
+          fail_on_unmatched_files: true
