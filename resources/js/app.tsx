@@ -2,6 +2,13 @@ import { type ReactNode } from 'react';
 import { createInertiaApp } from '@inertiajs/react';
 import { createRoot } from 'react-dom/client';
 import AppLayout from '@/layouts/app-layout';
+import type { SharedPageProps } from '@/types';
+
+/** Follow the OS colour scheme, like a native app — stamped before first paint. */
+const themeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+const applyTheme = () => document.documentElement.classList.toggle('dark', themeQuery.matches);
+applyTheme();
+themeQuery.addEventListener('change', applyTheme);
 
 createInertiaApp({
     title: (title) => (title ? `${title} · ZKTeco User Sync` : 'ZKTeco User Sync'),
@@ -19,9 +26,16 @@ createInertiaApp({
         return page;
     },
     setup({ el, App, props }) {
+        // Only macOS reserves the traffic-light gutter; everything else starts at 12px.
+        const platform = (props.initialPage.props as unknown as SharedPageProps).app?.platform;
+        const root = document.documentElement;
+        root.dataset.platform = platform ?? '';
+        if (platform && platform !== 'darwin') {
+            root.style.setProperty('--titlebar-inset-start', '12px');
+        }
+
         createRoot(el).render(<App {...props} />);
     },
-    progress: {
-        color: '#171717',
-    },
+    // No web-style top progress bar inside a fixed window — load feedback lives in the status bar.
+    progress: false,
 });

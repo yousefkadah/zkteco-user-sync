@@ -13,12 +13,23 @@ class NativeAppServiceProvider implements ProvidesPhpIni
      */
     public function boot(): void
     {
-        Window::open()
+        $window = Window::open()
             ->title(config('app.name', 'ZKTeco User Sync'))
             ->width(1280)
             ->height(860)
             ->minWidth(1024)
-            ->minHeight(640);
+            ->minHeight(640)
+            ->backgroundColor('#0b0d10'); // matches the dark window; avoids a white load flash
+
+        // macOS gets the bespoke frameless chrome with the native traffic lights
+        // inset into our custom titlebar. Windows/Linux keep the native OS frame
+        // so the user never loses min/max/close (safe cross-platform default).
+        if (PHP_OS_FAMILY === 'Darwin') {
+            $window->titleBarHiddenInset()
+                ->trafficLightPosition(16, 16);
+        }
+
+        $window->showDockIcon();
     }
 
     /**

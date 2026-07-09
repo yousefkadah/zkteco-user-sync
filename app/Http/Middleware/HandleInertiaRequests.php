@@ -34,6 +34,7 @@ class HandleInertiaRequests extends Middleware
             'app' => [
                 'name' => config('app.name'),
                 'version' => config('nativephp.version'),
+                'platform' => strtolower(PHP_OS_FAMILY), // 'darwin' | 'windows' | 'linux'
             ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),

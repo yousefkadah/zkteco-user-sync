@@ -3,10 +3,160 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@theme inline {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
-        'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+/* ──────────────────────────────────────────────────────────────────────────
+   ZKTeco User Sync — native desktop design tokens
+   A pinned window shell (titlebar / sidebar / status bar), one blue accent,
+   layered monochrome surfaces, OS-native font + density. Light + dark.
+   ────────────────────────────────────────────────────────────────────────── */
 
+:root {
+    color-scheme: light;
+
+    /* Fonts — OS UI voice, no web font */
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Text',
+        ui-sans-serif, system-ui, 'Helvetica Neue', Arial, sans-serif, 'Apple Color Emoji',
+        'Segoe UI Emoji';
+    --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas,
+        monospace;
+
+    /* Radii — native controls, not web cards */
+    --radius: 0.375rem;
+    --radius-sm: 0.25rem;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
+
+    /* One accent — brand blue */
+    --accent-brand: #2563eb;
+    --accent-brand-hover: #1d4ed8;
+    --accent-brand-active: #1e40af;
+    --accent-brand-fg: #ffffff;
+    --accent-soft: color-mix(in srgb, var(--accent-brand) 12%, transparent);
+    --ring: color-mix(in srgb, var(--accent-brand) 45%, transparent);
+
+    /* Layered chrome surfaces */
+    --window: #f4f5f7;
+    --titlebar: #eceef1;
+    --titlebar-foreground: #3c4149;
+    --toolbar: #f4f5f7;
+    --sidebar: #eceef1;
+    --sidebar-foreground: #3c4149;
+    --sidebar-active: var(--accent-soft);
+    --sidebar-active-foreground: var(--accent-brand);
+    --statusbar: #eceef1;
+    --statusbar-foreground: #6b7280;
+    --panel-header: #f7f8fa;
+
+    /* Content */
+    --background: #ffffff;
+    --foreground: #14171c;
+    --card: #ffffff;
+    --card-foreground: #14171c;
+    --muted: #f1f3f5;
+    --muted-foreground: #6b7280;
+    --accent: #f1f3f5;
+    --accent-foreground: #14171c;
+    --popover: #ffffff;
+    --popover-foreground: #14171c;
+    --primary: var(--accent-brand);
+    --primary-foreground: var(--accent-brand-fg);
+    --secondary: #f1f3f5;
+    --secondary-foreground: #14171c;
+
+    /* Hairlines */
+    --border: #e2e5e9;
+    --border-strong: #d0d4da;
+    --input: #d0d4da;
+
+    /* Semantic status */
+    --success: #16a34a;
+    --success-soft: color-mix(in srgb, #16a34a 14%, transparent);
+    --warning: #d97706;
+    --warning-soft: color-mix(in srgb, #d97706 16%, transparent);
+    --danger: #dc2626;
+    --danger-soft: color-mix(in srgb, #dc2626 14%, transparent);
+    --danger-foreground: #ffffff;
+    --info: var(--accent-brand);
+    --info-soft: var(--accent-soft);
+    --idle: #9aa1ab;
+    --idle-soft: color-mix(in srgb, #9aa1ab 16%, transparent);
+
+    /* Density scale */
+    --titlebar-h: 44px;
+    --titlebar-inset-start: 78px; /* mac traffic-light reserve; overridden to 12px elsewhere */
+    --toolbar-h: 44px;
+    --statusbar-h: 26px;
+    --sidebar-w: 208px;
+    --row-h: 32px;
+    --row-head-h: 30px;
+    --ctl-h: 28px;
+    --ctl-h-sm: 24px;
+    --ctl-h-lg: 32px;
+
+    --text-app: 13px;
+    --text-chrome: 11px;
+}
+
+.dark {
+    color-scheme: dark;
+
+    --accent-brand: #3b82f6;
+    --accent-brand-hover: #60a5fa;
+    --accent-brand-active: #2563eb;
+    --accent-brand-fg: #0b0d10;
+    --accent-soft: color-mix(in srgb, var(--accent-brand) 18%, transparent);
+    --ring: color-mix(in srgb, var(--accent-brand) 55%, transparent);
+
+    --window: #0b0d10;
+    --titlebar: #14171c;
+    --titlebar-foreground: #c3c8d1;
+    --toolbar: #0f1216;
+    --sidebar: #101319;
+    --sidebar-foreground: #aab1bd;
+    --sidebar-active: color-mix(in srgb, var(--accent-brand) 22%, transparent);
+    --sidebar-active-foreground: #7ba7ff;
+    --statusbar: #101319;
+    --statusbar-foreground: #8a919d;
+    --panel-header: #1a1e25;
+
+    --background: #16191f;
+    --foreground: #e6e9ee;
+    --card: #16191f;
+    --card-foreground: #e6e9ee;
+    --muted: #1c2027;
+    --muted-foreground: #8a919d;
+    --accent: #1c2027;
+    --accent-foreground: #e6e9ee;
+    --popover: #1a1e25;
+    --popover-foreground: #e6e9ee;
+    --secondary: #1c2027;
+    --secondary-foreground: #e6e9ee;
+
+    --border: #262b33;
+    --border-strong: #333a44;
+    --input: #333a44;
+
+    --success: #22c55e;
+    --success-soft: color-mix(in srgb, #22c55e 20%, transparent);
+    --warning: #f59e0b;
+    --warning-soft: color-mix(in srgb, #f59e0b 20%, transparent);
+    --danger: #ef4444;
+    --danger-soft: color-mix(in srgb, #ef4444 20%, transparent);
+    --danger-foreground: #0b0d10;
+    --info: var(--accent-brand);
+    --info-soft: var(--accent-soft);
+    --idle: #6b7280;
+    --idle-soft: color-mix(in srgb, #6b7280 22%, transparent);
+}
+
+@theme inline {
+    --font-sans: var(--font-sans);
+    --font-mono: var(--font-mono);
+
+    --radius-sm: var(--radius-sm);
+    --radius-md: var(--radius-md);
+    --radius-lg: var(--radius-lg);
+
+    /* Content */
     --color-background: var(--background);
     --color-foreground: var(--foreground);
     --color-card: var(--card);
@@ -21,74 +171,89 @@
     --color-muted-foreground: var(--muted-foreground);
     --color-accent: var(--accent);
     --color-accent-foreground: var(--accent-foreground);
-    --color-destructive: var(--destructive);
-    --color-destructive-foreground: var(--destructive-foreground);
     --color-border: var(--border);
+    --color-border-strong: var(--border-strong);
     --color-input: var(--input);
     --color-ring: var(--ring);
 
-    --radius-sm: calc(var(--radius) - 4px);
-    --radius-md: calc(var(--radius) - 2px);
-    --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) + 4px);
-}
+    /* Chrome surfaces */
+    --color-window: var(--window);
+    --color-titlebar: var(--titlebar);
+    --color-titlebar-foreground: var(--titlebar-foreground);
+    --color-toolbar: var(--toolbar);
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-active: var(--sidebar-active);
+    --color-sidebar-active-foreground: var(--sidebar-active-foreground);
+    --color-statusbar: var(--statusbar);
+    --color-statusbar-foreground: var(--statusbar-foreground);
+    --color-panel-header: var(--panel-header);
 
-:root {
-    --radius: 0.625rem;
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --destructive-foreground: oklch(0.985 0 0);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-}
-
-.dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --destructive-foreground: oklch(0.985 0 0);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    /* Accent + semantic status */
+    --color-accent-brand: var(--accent-brand);
+    --color-accent-brand-fg: var(--accent-brand-fg);
+    --color-success: var(--success);
+    --color-success-soft: var(--success-soft);
+    --color-warning: var(--warning);
+    --color-warning-soft: var(--warning-soft);
+    --color-danger: var(--danger);
+    --color-danger-soft: var(--danger-soft);
+    --color-danger-foreground: var(--danger-foreground);
+    --color-info: var(--info);
+    --color-info-soft: var(--info-soft);
+    --color-idle: var(--idle);
+    --color-idle-soft: var(--idle-soft);
 }
 
 @layer base {
     * {
-        @apply border-border outline-ring/50;
+        @apply border-border;
+    }
+
+    html,
+    body,
+    #app {
+        height: 100%;
     }
 
     body {
-        @apply bg-background text-foreground;
+        background: var(--window);
+        color: var(--foreground);
+        font-family: var(--font-sans);
+        font-size: var(--text-app);
+        -webkit-font-smoothing: antialiased;
+        overflow: hidden; /* the window itself never scrolls */
+        user-select: none; /* chrome text isn't selectable */
+        -webkit-user-select: none;
+    }
+
+    /* Data cells, inputs and anything opted-in stay selectable/copyable */
+    .selectable,
+    input,
+    textarea,
+    [contenteditable] {
+        user-select: text;
+        -webkit-user-select: text;
     }
 }
 
-/* Animated data streams — dots flowing between the app and a device. */
+/* Electron window-drag regions */
+.drag {
+    -webkit-app-region: drag;
+}
+.no-drag {
+    -webkit-app-region: no-drag;
+}
+
+/* Monospace figure cells — ids, PINs, cards, IPs, slots */
+.mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+/* ── Animated data streams — dots flowing between the app and a device. ── */
 .flow-dot {
     position: absolute;
     top: 50%;
@@ -96,17 +261,24 @@
     width: 0.5rem;
     margin-top: -0.25rem;
     border-radius: 9999px;
-    background-color: var(--primary);
+    background-color: var(--accent-brand);
 }
 
 .flow-dot--to-device {
-    left: 0;
+    inset-inline-start: 0;
     animation: flow-to-device 1.6s linear infinite;
 }
 
 .flow-dot--to-app {
-    right: 0;
+    inset-inline-end: 0;
     animation: flow-to-app 1.6s linear infinite;
+}
+
+/* Compact stream (status bar / toolbar) */
+.flow-track--inline .flow-dot {
+    height: 0.3rem;
+    width: 0.3rem;
+    margin-top: -0.15rem;
 }
 
 @keyframes flow-to-device {
@@ -123,13 +295,13 @@
     100% { right: 100%; opacity: 0; transform: scale(0.6); }
 }
 
-/* Radar sweep — network scan. */
+/* ── Radar sweep — network scan. ── */
 .radar-sweep {
     background: conic-gradient(
         from 0deg,
         transparent 0deg,
         transparent 280deg,
-        color-mix(in oklch, var(--primary) 45%, transparent) 360deg
+        color-mix(in oklch, var(--accent-brand) 45%, transparent) 360deg
     );
     animation: radar-spin 1.4s linear infinite;
 }
@@ -142,7 +314,7 @@
     position: absolute;
     inset: 0;
     border-radius: 9999px;
-    border: 1px solid var(--primary);
+    border: 1px solid var(--accent-brand);
     opacity: 0;
     animation: ping-ring 1.6s ease-out infinite;
 }
@@ -152,7 +324,7 @@
     100% { transform: scale(1.9); opacity: 0; }
 }
 
-/* Connecting dots — test connection / handshake. */
+/* ── Connecting dots — test connection / handshake. ── */
 .connect-dot {
     display: inline-block;
     height: 0.3rem;

@@ -1,9 +1,8 @@
 import { type FormEvent, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { Check, Loader2, Pencil, Plus, Trash2, Users, Wifi } from 'lucide-react';
+import { Check, Loader2, Pencil, Plus, Trash2, Users, Wifi, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import {
     Dialog,
     DialogContent,
@@ -14,8 +13,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { StatusBadge } from '@/components/status-badge';
 import { ConnectingDots } from '@/components/connecting-dots';
 import { ScanRadar } from '@/components/scan-radar';
+import { Page, PageScroll, SubBar, Toolbar } from '@/components/shell/page';
+import { usePageStatus } from '@/components/shell/shell-status';
 import { cn } from '@/lib/utils';
 import type { Device } from '@/types';
 
@@ -53,6 +56,25 @@ export default function DevicesIndex({ devices }: Props) {
     const [scanned, setScanned] = useState(false);
     const [scanError, setScanError] = useState<string | null>(null);
     const [discovered, setDiscovered] = useState<DiscoveredDevice[]>([]);
+
+    const onlineCount = devices.filter((device) => device.last_connection_ok).length;
+
+    usePageStatus(
+        () => ({
+            connection: (
+                <span className="flex items-center gap-1.5">
+                    <span className={cn('size-1.5 rounded-full', onlineCount > 0 ? 'bg-success' : 'bg-idle')} />
+                    {onlineCount} online
+                </span>
+            ),
+            counts: (
+                <span className="tabular-nums">
+                    {devices.length} device{devices.length === 1 ? '' : 's'}
+                </span>
+            ),
+        }),
+        [devices.length, onlineCount],
+    );
 
     const set = <K extends keyof DeviceForm>(key: K, value: DeviceForm[K]) =>
         setForm((current) => ({ ...current, [key]: value }));
@@ -157,75 +179,73 @@ export default function DevicesIndex({ devices }: Props) {
 
     const formatDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : 'Never');
 
+    const showScanStrip = scanning || scanned || Boolean(scanError);
+
     return (
-        <>
+        <Page>
             <Head title="Devices" />
 
-            <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <h1 className="text-2xl font-semibold">Devices</h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        ZKTeco terminals reachable on your local network (default port 4370).
-                    </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="outline" onClick={scan} disabled={scanning}>
+            <Toolbar>
+                <span className="text-[13px] font-semibold">Devices</span>
+                <span className="rounded-sm bg-muted px-1.5 text-[11px] tabular-nums text-muted-foreground">
+                    {devices.length}
+                </span>
+
+                <div className="ms-auto flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={scan} disabled={scanning}>
                         {scanning ? <Loader2 className="size-4 animate-spin" /> : <Wifi className="size-4" />}
                         {scanning ? 'Scanning…' : 'Scan network'}
                     </Button>
-                    <Button onClick={openCreate}>
-                        <Plus className="size-4" />
-                        Add device
+                    <Button size="sm" onClick={openCreate}>
+                        <Plus className="size-4" /> Add device
                     </Button>
                 </div>
-            </header>
+            </Toolbar>
 
-            {(scanning || scanned || scanError) && (
-                <Card className="mb-6 p-5">
-                    <div className="mb-3 flex items-center justify-between">
-                        <h2 className="text-sm font-semibold">Discovered on your network</h2>
+            {showScanStrip && (
+                <SubBar className="flex-col items-stretch gap-2">
+                    <div className="flex items-center justify-between">
+                        {scanning ? (
+                            <ScanRadar />
+                        ) : scanError ? (
+                            <span className="text-[12px] text-danger">{scanError}</span>
+                        ) : discovered.length === 0 ? (
+                            <span className="text-[12px] text-muted-foreground">
+                                No ZKTeco devices found on this network.
+                            </span>
+                        ) : (
+                            <span className="text-[12px] font-medium">
+                                Discovered {discovered.length} device{discovered.length === 1 ? '' : 's'}
+                            </span>
+                        )}
                         {!scanning && (
                             <button
                                 type="button"
-                                className="text-xs text-muted-foreground hover:text-foreground"
+                                className="flex size-5 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
                                 onClick={dismissScan}
                             >
-                                Dismiss
+                                <X className="size-3.5" />
                             </button>
                         )}
                     </div>
 
-                    {scanning && <ScanRadar />}
-
-                    {!scanning && scanError && <p className="py-2 text-sm text-destructive">{scanError}</p>}
-
-                    {!scanning && !scanError && scanned && discovered.length === 0 && (
-                        <p className="py-2 text-sm text-muted-foreground">
-                            No ZKTeco devices found. Check that a terminal is powered on and on this network.
-                        </p>
-                    )}
-
                     {!scanning && discovered.length > 0 && (
-                        <ul className="divide-y">
+                        <div className="flex gap-2 overflow-x-auto pb-1">
                             {discovered.map((device) => (
-                                <li
+                                <div
                                     key={device.ip_address}
-                                    className="flex animate-in fade-in-0 slide-in-from-top-1 items-center justify-between gap-4 py-3 duration-300"
+                                    className="flex shrink-0 items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5"
                                 >
                                     <div className="min-w-0">
-                                        <p className="font-mono text-sm">{device.ip_address}</p>
-                                        <p className="truncate text-xs text-muted-foreground">
-                                            {[
-                                                device.name,
-                                                device.serial_number ? `S/N ${device.serial_number}` : null,
-                                                device.firmware,
-                                            ]
+                                        <p className="mono text-[12px]">{device.ip_address}</p>
+                                        <p className="max-w-[160px] truncate text-[10px] text-muted-foreground">
+                                            {[device.name, device.serial_number ? `S/N ${device.serial_number}` : null, device.firmware]
                                                 .filter(Boolean)
                                                 .join(' · ') || 'ZKTeco device'}
                                         </p>
                                     </div>
                                     {device.already_added ? (
-                                        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
+                                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-success">
                                             <Check className="size-3.5" /> Added
                                         </span>
                                     ) : (
@@ -233,114 +253,99 @@ export default function DevicesIndex({ devices }: Props) {
                                             Add
                                         </Button>
                                     )}
-                                </li>
+                                </div>
                             ))}
-                        </ul>
+                        </div>
                     )}
-                </Card>
+                </SubBar>
             )}
 
-            {devices.length === 0 ? (
-                <div className="rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
-                    No devices yet. Add your first ZKTeco terminal to start syncing.
-                </div>
-            ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
-                    {devices.map((device) => (
-                        <Card
-                            key={device.id}
-                            className={cn(
-                                'animate-in fade-in-0 slide-in-from-bottom-2 p-5 transition-shadow duration-500',
-                                testingId === device.id && 'ring-2 ring-primary/40',
-                            )}
-                        >
-                            <div className="flex items-start justify-between">
-                                <div>
-                                    <h3 className="text-base font-semibold">{device.name}</h3>
-                                    <p className="mt-0.5 font-mono text-sm text-muted-foreground">
+            <PageScroll>
+                {devices.length === 0 ? (
+                    <div className="flex h-full items-center justify-center p-10 text-center text-[13px] text-muted-foreground">
+                        No devices yet. Add your first ZKTeco terminal, or scan the network.
+                    </div>
+                ) : (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Name</TableHead>
+                                <TableHead>Address</TableHead>
+                                <TableHead>Serial</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Last checked</TableHead>
+                                <TableHead className="text-end">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {devices.map((device) => (
+                                <TableRow key={device.id} className={cn(testingId === device.id && 'bg-accent-brand/5')}>
+                                    <TableCell className="font-medium">
+                                        <Link href={`/devices/${device.id}/users`} className="hover:text-accent-brand hover:underline">
+                                            {device.name}
+                                        </Link>
+                                    </TableCell>
+                                    <TableCell className="mono text-muted-foreground">
                                         {device.ip_address}:{device.port}
-                                    </p>
-                                </div>
-                                {testingId === device.id ? (
-                                    <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                                        <span className="relative flex size-1.5">
-                                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary opacity-75" />
-                                            <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
-                                        </span>
-                                        Connecting
-                                    </span>
-                                ) : (
-                                    <span
-                                        className={cn(
-                                            'inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium',
-                                            device.last_connection_ok
-                                                ? 'bg-emerald-100 text-emerald-700'
-                                                : 'bg-muted text-muted-foreground',
+                                    </TableCell>
+                                    <TableCell className="mono text-muted-foreground">{device.serial_number ?? '—'}</TableCell>
+                                    <TableCell>
+                                        {testingId === device.id ? (
+                                            <StatusBadge tone="info">Connecting</StatusBadge>
+                                        ) : device.last_connection_ok ? (
+                                            <StatusBadge tone="success">Online</StatusBadge>
+                                        ) : (
+                                            <StatusBadge tone="idle">Unknown</StatusBadge>
                                         )}
-                                    >
-                                        <span
-                                            className={cn(
-                                                'size-1.5 rounded-full',
-                                                device.last_connection_ok ? 'bg-emerald-500' : 'bg-muted-foreground',
-                                            )}
-                                        />
-                                        {device.last_connection_ok ? 'Online' : 'Unknown'}
-                                    </span>
-                                )}
-                            </div>
-
-                            <dl className="mt-4 space-y-1 text-sm">
-                                <div className="flex justify-between">
-                                    <dt className="text-muted-foreground">Serial</dt>
-                                    <dd>{device.serial_number ?? '—'}</dd>
-                                </div>
-                                <div className="flex justify-between">
-                                    <dt className="text-muted-foreground">Comm key</dt>
-                                    <dd>{device.comm_key ?? 'None'}</dd>
-                                </div>
-                                <div className="flex justify-between">
-                                    <dt className="text-muted-foreground">Last checked</dt>
-                                    <dd>{formatDate(device.last_connected_at)}</dd>
-                                </div>
-                            </dl>
-
-                            <div className="mt-5 flex flex-wrap gap-2">
-                                <Button asChild className="flex-1">
-                                    <Link href={`/devices/${device.id}/users`}>
-                                        <Users className="size-4" /> View users
-                                    </Link>
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    className="flex-1"
-                                    disabled={testingId === device.id}
-                                    onClick={() => test(device)}
-                                >
-                                    {testingId === device.id ? (
-                                        <span className="inline-flex items-center gap-1.5">
-                                            <ConnectingDots /> Connecting
-                                        </span>
-                                    ) : (
-                                        'Test connection'
-                                    )}
-                                </Button>
-                                <Button variant="outline" size="icon" onClick={() => openEdit(device)} title="Edit">
-                                    <Pencil className="size-4" />
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="text-destructive hover:text-destructive"
-                                    onClick={() => remove(device)}
-                                    title="Delete"
-                                >
-                                    <Trash2 className="size-4" />
-                                </Button>
-                            </div>
-                        </Card>
-                    ))}
-                </div>
-            )}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">{formatDate(device.last_connected_at)}</TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center justify-end gap-1">
+                                            <Button variant="ghost" size="sm" asChild>
+                                                <Link href={`/devices/${device.id}/users`}>
+                                                    <Users className="size-4" /> Users
+                                                </Link>
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                disabled={testingId === device.id}
+                                                onClick={() => test(device)}
+                                            >
+                                                {testingId === device.id ? (
+                                                    <span className="inline-flex items-center gap-1.5">
+                                                        <ConnectingDots /> Testing
+                                                    </span>
+                                                ) : (
+                                                    'Test'
+                                                )}
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="opacity-0 group-hover:opacity-100"
+                                                onClick={() => openEdit(device)}
+                                                title="Edit"
+                                            >
+                                                <Pencil className="size-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="text-muted-foreground opacity-0 hover:text-danger group-hover:opacity-100"
+                                                onClick={() => remove(device)}
+                                                title="Delete"
+                                            >
+                                                <Trash2 className="size-4" />
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                )}
+            </PageScroll>
 
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent>
@@ -348,7 +353,7 @@ export default function DevicesIndex({ devices }: Props) {
                         <DialogTitle>{editingId ? 'Edit device' : 'Add device'}</DialogTitle>
                     </DialogHeader>
 
-                    <form className="space-y-4" onSubmit={submit}>
+                    <form className="space-y-3" onSubmit={submit}>
                         <div className="space-y-1.5">
                             <Label htmlFor="name">Name</Label>
                             <Input
@@ -357,7 +362,7 @@ export default function DevicesIndex({ devices }: Props) {
                                 placeholder="Front door terminal"
                                 onChange={(event) => set('name', event.target.value)}
                             />
-                            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+                            {errors.name && <p className="text-[11px] text-danger">{errors.name}</p>}
                         </div>
 
                         <div className="grid grid-cols-3 gap-3">
@@ -367,10 +372,10 @@ export default function DevicesIndex({ devices }: Props) {
                                     id="ip"
                                     value={form.ip_address}
                                     placeholder="192.168.1.201"
-                                    className="font-mono"
+                                    className="mono"
                                     onChange={(event) => set('ip_address', event.target.value)}
                                 />
-                                {errors.ip_address && <p className="text-xs text-destructive">{errors.ip_address}</p>}
+                                {errors.ip_address && <p className="text-[11px] text-danger">{errors.ip_address}</p>}
                             </div>
                             <div className="space-y-1.5">
                                 <Label htmlFor="port">Port</Label>
@@ -380,7 +385,7 @@ export default function DevicesIndex({ devices }: Props) {
                                     value={form.port}
                                     onChange={(event) => set('port', event.target.value)}
                                 />
-                                {errors.port && <p className="text-xs text-destructive">{errors.port}</p>}
+                                {errors.port && <p className="text-[11px] text-danger">{errors.port}</p>}
                             </div>
                         </div>
 
@@ -395,7 +400,7 @@ export default function DevicesIndex({ devices }: Props) {
                                 placeholder="Leave blank if the device has none"
                                 onChange={(event) => set('comm_key', event.target.value)}
                             />
-                            {errors.comm_key && <p className="text-xs text-destructive">{errors.comm_key}</p>}
+                            {errors.comm_key && <p className="text-[11px] text-danger">{errors.comm_key}</p>}
                         </div>
 
                         <div className="space-y-1.5">
@@ -416,6 +421,6 @@ export default function DevicesIndex({ devices }: Props) {
                     </form>
                 </DialogContent>
             </Dialog>
-        </>
+        </Page>
     );
 }

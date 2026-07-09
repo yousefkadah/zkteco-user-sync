@@ -1,9 +1,8 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, ArrowRight, Pencil, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Pencil, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import {
     Dialog,
     DialogContent,
@@ -18,6 +17,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AnimatedNumber } from '@/components/animated-number';
 import { StatusBadge } from '@/components/status-badge';
 import { SyncFlow } from '@/components/sync-flow';
+import { Page, PageScroll, SubBar, Toolbar } from '@/components/shell/page';
+import { usePageStatus } from '@/components/shell/shell-status';
 import { cn } from '@/lib/utils';
 import type { BatchSummary, DeviceLite, ImportedUserRow, Paginated } from '@/types';
 
@@ -37,6 +38,17 @@ interface UserForm {
 
 const EMPTY_USER: UserForm = { user_id: '', name: '', password: '', card_number: '', privilege: 'user' };
 
+function Metric({ label, value, className }: { label: string; value: number; className?: string }) {
+    return (
+        <div className="flex flex-col leading-tight">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
+            <span className={cn('text-[15px] font-semibold tabular-nums', className)}>
+                <AnimatedNumber value={value} />
+            </span>
+        </div>
+    );
+}
+
 export default function ImportShow({ batch, users, devices }: Props) {
     const [deviceId, setDeviceId] = useState<string>(String(batch.device?.id ?? devices[0]?.id ?? ''));
     const timer = useRef<number | null>(null);
@@ -48,11 +60,53 @@ export default function ImportShow({ batch, users, devices }: Props) {
     const [saving, setSaving] = useState(false);
 
     const isSyncing = batch.status === 'syncing';
-    const processed = batch.synced_count + batch.failed_count;
-    const percent = batch.valid_rows ? Math.min(100, Math.round((processed / batch.valid_rows) * 100)) : 0;
     const canSync = devices.length > 0 && batch.valid_rows > 0 && !isSyncing;
     const showFlow = isSyncing || batch.status === 'completed' || batch.status === 'failed';
     const deviceName = batch.device?.name ?? devices.find((device) => String(device.id) === deviceId)?.name;
+
+    const prevLink = users.links[0];
+    const nextLink = users.links[users.links.length - 1];
+
+    usePageStatus(
+        () => {
+            const counts: ReactNode =
+                users.last_page > 1 ? (
+                    <span className="flex items-center gap-1">
+                        <button
+                            type="button"
+                            disabled={!prevLink?.url}
+                            onClick={() => prevLink?.url && router.visit(prevLink.url, { preserveScroll: true, preserveState: true })}
+                            className="flex size-4 items-center justify-center rounded-sm hover:bg-accent disabled:opacity-30"
+                        >
+                            <ChevronLeft className="size-3.5" />
+                        </button>
+                        <span className="tabular-nums">
+                            Page {users.current_page} of {users.last_page}
+                        </span>
+                        <button
+                            type="button"
+                            disabled={!nextLink?.url}
+                            onClick={() => nextLink?.url && router.visit(nextLink.url, { preserveScroll: true, preserveState: true })}
+                            className="flex size-4 items-center justify-center rounded-sm hover:bg-accent disabled:opacity-30"
+                        >
+                            <ChevronRight className="size-3.5" />
+                        </button>
+                    </span>
+                ) : (
+                    <span className="tabular-nums">{users.total} rows</span>
+                );
+
+            return {
+                sync: isSyncing ? (
+                    <span className="tabular-nums">
+                        Syncing {batch.synced_count + batch.failed_count} / {batch.valid_rows}
+                    </span>
+                ) : undefined,
+                counts,
+            };
+        },
+        [isSyncing, batch.synced_count, batch.failed_count, batch.valid_rows, users.current_page, users.last_page, users.total, prevLink?.url, nextLink?.url],
+    );
 
     useEffect(() => {
         if (isSyncing) {
@@ -128,111 +182,81 @@ export default function ImportShow({ batch, users, devices }: Props) {
 
     const rowStatus = (user: ImportedUserRow) => (!user.is_valid ? 'skipped' : user.sync_status);
 
-    const summary = [
-        { label: 'Total', value: batch.total_rows, className: '' },
-        { label: 'Valid', value: batch.valid_rows, className: 'text-emerald-600' },
-        { label: 'Invalid', value: batch.invalid_rows, className: 'text-rose-500' },
-    ];
-
     return (
-        <>
+        <Page>
             <Head title={batch.original_filename} />
 
-            <div className="mb-6">
-                <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-                    <ArrowLeft className="size-4" /> Imports
-                </Link>
-                <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center gap-3">
-                        <h1 className="text-2xl font-semibold">{batch.original_filename}</h1>
-                        <StatusBadge status={batch.status} />
-                    </div>
+            <Toolbar>
+                <div className="flex min-w-0 items-center gap-1.5 text-[13px]">
+                    <Link href="/" className="text-muted-foreground hover:text-foreground">
+                        Imports
+                    </Link>
+                    <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className="truncate font-semibold">{batch.original_filename}</span>
+                    <StatusBadge status={batch.status} className="ms-1" />
+                </div>
+
+                <div className="ms-auto flex items-center gap-2">
+                    <Select value={deviceId} onValueChange={setDeviceId} disabled={isSyncing || devices.length === 0}>
+                        <SelectTrigger className="w-52">
+                            <SelectValue placeholder="Select a device" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {devices.map((device) => (
+                                <SelectItem key={device.id} value={String(device.id)}>
+                                    {device.name} ({device.ip_address})
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Button onClick={sync} disabled={!canSync || !deviceId}>
+                        <RefreshCw className={cn('size-4', isSyncing && 'animate-spin')} />
+                        {isSyncing ? 'Syncing…' : `Sync ${batch.valid_rows}`}
+                    </Button>
                     {batch.valid_rows > 0 && (
-                        <Button asChild size="lg" className="w-full sm:w-auto">
+                        <Button variant="outline" size="icon" asChild title="Transfer view">
                             <Link href={`/import/${batch.id}/transfer`}>
-                                <Send className="size-4" /> Send to device
-                                <ArrowRight className="size-4" />
+                                <Send className="size-4" />
                             </Link>
                         </Button>
                     )}
                 </div>
-            </div>
+            </Toolbar>
 
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                {summary.map((card) => (
-                    <Card key={card.label} className="animate-in fade-in-0 p-4 duration-500">
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{card.label}</p>
-                        <p className={cn('mt-1 text-2xl font-semibold', card.className)}>
-                            <AnimatedNumber value={card.value} />
-                        </p>
-                    </Card>
-                ))}
-                <Card className="animate-in fade-in-0 p-4 duration-500">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Synced</p>
-                    <p className="mt-1 text-2xl font-semibold text-blue-600">
-                        <AnimatedNumber value={batch.synced_count} />
-                        {batch.failed_count > 0 && (
-                            <span className="text-base font-medium text-rose-500">
-                                {' '}
-                                · <AnimatedNumber value={batch.failed_count} /> failed
-                            </span>
-                        )}
-                    </p>
-                </Card>
-            </div>
+            <SubBar className="gap-6">
+                <Metric label="Total" value={batch.total_rows} />
+                <Metric label="Valid" value={batch.valid_rows} className="text-success" />
+                <Metric label="Invalid" value={batch.invalid_rows} className="text-danger" />
+                <Metric label="Synced" value={batch.synced_count} className="text-accent-brand" />
+                {batch.failed_count > 0 && <Metric label="Failed" value={batch.failed_count} className="text-danger" />}
 
-            <Card className="mt-6 p-6">
-                <div className="flex flex-wrap items-end gap-4">
-                    <div className="flex-1">
-                        <p className="mb-1 text-sm font-medium">Target device</p>
-                        <Select value={deviceId} onValueChange={setDeviceId} disabled={isSyncing || devices.length === 0}>
-                            <SelectTrigger className="max-w-sm">
-                                <SelectValue placeholder="Select a device" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {devices.map((device) => (
-                                    <SelectItem key={device.id} value={String(device.id)}>
-                                        {device.name} ({device.ip_address})
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {devices.length === 0 && (
-                            <p className="mt-1 text-xs text-amber-600">
-                                <Link href="/devices" className="underline">
-                                    Add a device
-                                </Link>{' '}
-                                first.
-                            </p>
-                        )}
-                    </div>
-                    <Button onClick={sync} disabled={!canSync || !deviceId} size="lg" className="w-full sm:w-auto">
-                        <RefreshCw className={cn('size-4', isSyncing && 'animate-spin')} />
-                        {isSyncing ? 'Syncing…' : `Sync ${batch.valid_rows} users`}
-                    </Button>
-                </div>
-
-                {showFlow && (
-                    <div className="mt-6 border-t pt-6">
-                        <SyncFlow
-                            status={batch.status}
-                            total={batch.valid_rows}
-                            synced={batch.synced_count}
-                            failed={batch.failed_count}
-                            deviceName={deviceName}
-                        />
-                    </div>
+                {devices.length === 0 && (
+                    <span className="text-[12px] text-warning">
+                        <Link href="/devices" className="underline">
+                            Add a device
+                        </Link>{' '}
+                        to sync.
+                    </span>
                 )}
-            </Card>
 
-            <div className="mb-3 mt-6 flex items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground">Review and edit rows before syncing.</p>
-                <Button variant="outline" size="sm" onClick={openAddUser} disabled={isSyncing}>
+                <Button variant="outline" size="sm" className="ms-auto" onClick={openAddUser} disabled={isSyncing}>
                     <Plus className="size-4" /> Add user
                 </Button>
-            </div>
+            </SubBar>
 
-            <Card className="overflow-hidden">
+            {showFlow && (
+                <SubBar>
+                    <SyncFlow
+                        status={batch.status}
+                        total={batch.valid_rows}
+                        synced={batch.synced_count}
+                        failed={batch.failed_count}
+                        deviceName={deviceName}
+                    />
+                </SubBar>
+            )}
+
+            <PageScroll>
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -244,45 +268,41 @@ export default function ImportShow({ batch, users, devices }: Props) {
                             <TableHead>Card</TableHead>
                             <TableHead>Role</TableHead>
                             <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Edit</TableHead>
+                            <TableHead className="text-end">Edit</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {users.data.map((user) => (
-                            <TableRow key={user.id} className={cn(!user.is_valid && 'bg-rose-50/50')}>
-                                <TableCell className="text-muted-foreground">{user.row_number}</TableCell>
-                                <TableCell className="font-mono">{user.user_id || '—'}</TableCell>
+                            <TableRow key={user.id} className={cn(!user.is_valid && 'bg-danger-soft/40')}>
+                                <TableCell className="mono text-muted-foreground">{user.row_number}</TableCell>
+                                <TableCell className="mono">{user.user_id || '—'}</TableCell>
                                 <TableCell>{user.name}</TableCell>
-                                <TableCell className="font-mono text-muted-foreground">{user.name_ascii || '—'}</TableCell>
-                                <TableCell className="font-mono text-muted-foreground">{user.password || '—'}</TableCell>
-                                <TableCell className="font-mono text-muted-foreground">{user.card_number || '—'}</TableCell>
+                                <TableCell className="mono text-muted-foreground">{user.name_ascii || '—'}</TableCell>
+                                <TableCell className="mono text-muted-foreground">{user.password || '—'}</TableCell>
+                                <TableCell className="mono text-muted-foreground">{user.card_number || '—'}</TableCell>
                                 <TableCell>
                                     {user.privilege === 'admin' ? (
-                                        <span className="rounded bg-violet-100 px-1.5 py-0.5 text-xs font-medium text-violet-700">
-                                            Admin
-                                        </span>
+                                        <StatusBadge tone="info">Admin</StatusBadge>
                                     ) : (
                                         <span className="text-muted-foreground">User</span>
                                     )}
                                 </TableCell>
                                 <TableCell>
-                                    <div className="flex flex-col gap-1">
+                                    <div className="flex flex-col gap-0.5">
                                         <StatusBadge status={rowStatus(user)} />
                                         {!user.is_valid && user.validation_errors.length > 0 ? (
-                                            <span className="text-xs text-rose-500">
-                                                {user.validation_errors.join(', ')}
-                                            </span>
+                                            <span className="text-[11px] text-danger">{user.validation_errors.join(', ')}</span>
                                         ) : (
-                                            user.sync_error && <span className="text-xs text-rose-500">{user.sync_error}</span>
+                                            user.sync_error && <span className="text-[11px] text-danger">{user.sync_error}</span>
                                         )}
                                     </div>
                                 </TableCell>
                                 <TableCell>
-                                    <div className="flex justify-end gap-1">
+                                    <div className="flex items-center justify-end gap-1">
                                         <Button
                                             variant="ghost"
                                             size="icon"
-                                            className="size-8"
+                                            className="opacity-0 group-hover:opacity-100"
                                             onClick={() => openEditUser(user)}
                                             disabled={isSyncing}
                                         >
@@ -291,7 +311,7 @@ export default function ImportShow({ batch, users, devices }: Props) {
                                         <Button
                                             variant="ghost"
                                             size="icon"
-                                            className="size-8 text-muted-foreground hover:text-destructive"
+                                            className="text-muted-foreground opacity-0 hover:text-danger group-hover:opacity-100"
                                             onClick={() => deleteUser(user)}
                                             disabled={isSyncing}
                                         >
@@ -303,32 +323,7 @@ export default function ImportShow({ batch, users, devices }: Props) {
                         ))}
                     </TableBody>
                 </Table>
-
-                {users.last_page > 1 && (
-                    <div className="flex flex-wrap items-center gap-1 border-t px-4 py-3">
-                        {users.links.map((link, index) =>
-                            link.url ? (
-                                <Link
-                                    key={index}
-                                    href={link.url}
-                                    preserveScroll
-                                    className={cn(
-                                        'rounded-md px-3 py-1.5 text-sm',
-                                        link.active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary',
-                                    )}
-                                    dangerouslySetInnerHTML={{ __html: link.label }}
-                                />
-                            ) : (
-                                <span
-                                    key={index}
-                                    className="px-3 py-1.5 text-sm text-muted-foreground/40"
-                                    dangerouslySetInnerHTML={{ __html: link.label }}
-                                />
-                            ),
-                        )}
-                    </div>
-                )}
-            </Card>
+            </PageScroll>
 
             <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
                 <DialogContent>
@@ -336,7 +331,7 @@ export default function ImportShow({ batch, users, devices }: Props) {
                         <DialogTitle>{editingUser ? 'Edit user' : 'Add user'}</DialogTitle>
                     </DialogHeader>
 
-                    <form className="space-y-4" onSubmit={submitUser}>
+                    <form className="space-y-3" onSubmit={submitUser}>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                                 <Label htmlFor="user_id">User ID</Label>
@@ -344,10 +339,10 @@ export default function ImportShow({ batch, users, devices }: Props) {
                                     id="user_id"
                                     value={form.user_id}
                                     placeholder="e.g. 1001"
-                                    className="font-mono"
+                                    className="mono"
                                     onChange={(event) => set('user_id', event.target.value)}
                                 />
-                                {formErrors.user_id && <p className="text-xs text-destructive">{formErrors.user_id}</p>}
+                                {formErrors.user_id && <p className="text-[11px] text-danger">{formErrors.user_id}</p>}
                             </div>
                             <div className="space-y-1.5">
                                 <Label htmlFor="privilege">Role</Label>
@@ -371,7 +366,7 @@ export default function ImportShow({ batch, users, devices }: Props) {
                                 placeholder="Dana Cohen"
                                 onChange={(event) => set('name', event.target.value)}
                             />
-                            {formErrors.name && <p className="text-xs text-destructive">{formErrors.name}</p>}
+                            {formErrors.name && <p className="text-[11px] text-danger">{formErrors.name}</p>}
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
@@ -381,7 +376,7 @@ export default function ImportShow({ batch, users, devices }: Props) {
                                     id="password"
                                     value={form.password}
                                     placeholder="≤ 8 digits"
-                                    className="font-mono"
+                                    className="mono"
                                     onChange={(event) => set('password', event.target.value)}
                                 />
                             </div>
@@ -391,13 +386,13 @@ export default function ImportShow({ batch, users, devices }: Props) {
                                     id="card_number"
                                     value={form.card_number}
                                     placeholder="≤ 10 digits"
-                                    className="font-mono"
+                                    className="mono"
                                     onChange={(event) => set('card_number', event.target.value)}
                                 />
                             </div>
                         </div>
 
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-[11px] text-muted-foreground">
                             Device limits: user id ≤ 9 digits, name ≤ 24 chars (auto-converted), PIN ≤ 8 digits. Rows that
                             break a rule are saved but flagged invalid until fixed.
                         </p>
@@ -413,6 +408,6 @@ export default function ImportShow({ batch, users, devices }: Props) {
                     </form>
                 </DialogContent>
             </Dialog>
-        </>
+        </Page>
     );
 }

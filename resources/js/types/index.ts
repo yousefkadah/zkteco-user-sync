@@ -64,7 +64,7 @@ export interface Paginated<T> {
 }
 
 export interface SharedPageProps {
-    app: { name: string; version: string };
+    app: { name: string; version: string; platform?: 'darwin' | 'windows' | 'linux' };
     flash: { success: string | null; error: string | null };
     [key: string]: unknown;
 }

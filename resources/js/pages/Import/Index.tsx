@@ -1,12 +1,15 @@
-import { type DragEvent, useRef, useState } from 'react';
+import { type DragEvent, useMemo, useRef, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { Download, Trash2, UploadCloud } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ConnectingDots } from '@/components/connecting-dots';
+import { Segmented } from '@/components/ui/segmented';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatusBadge } from '@/components/status-badge';
+import { ConnectingDots } from '@/components/connecting-dots';
+import { Page, PageScroll, Toolbar } from '@/components/shell/page';
+import { usePageStatus } from '@/components/shell/shell-status';
+import { cn } from '@/lib/utils';
 import type { BatchSummary, DeviceLite } from '@/types';
 
 interface Props {
@@ -14,11 +17,34 @@ interface Props {
     devices: DeviceLite[];
 }
 
+type Filter = 'all' | 'pending' | 'done' | 'failed';
+
+const bucket = (status: string): Exclude<Filter, 'all'> =>
+    status === 'failed' ? 'failed' : status === 'completed' || status === 'synced' ? 'done' : 'pending';
+
 export default function ImportIndex({ batches, devices }: Props) {
     const [file, setFile] = useState<File | null>(null);
     const [processing, setProcessing] = useState(false);
     const [dragOver, setDragOver] = useState(false);
+    const [filter, setFilter] = useState<Filter>('all');
     const inputRef = useRef<HTMLInputElement>(null);
+
+    const filtered = useMemo(
+        () => (filter === 'all' ? batches : batches.filter((batch) => bucket(batch.status) === filter)),
+        [batches, filter],
+    );
+
+    usePageStatus(
+        () => ({
+            counts: (
+                <span className="tabular-nums">
+                    {batches.length} import{batches.length === 1 ? '' : 's'} · {devices.length} device
+                    {devices.length === 1 ? '' : 's'}
+                </span>
+            ),
+        }),
+        [batches.length, devices.length],
+    );
 
     const submit = () => {
         if (!file || processing) {
@@ -59,31 +85,44 @@ export default function ImportIndex({ batches, devices }: Props) {
     const formatDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '—');
 
     return (
-        <>
+        <Page>
             <Head title="Imports" />
 
-            <header className="mb-6">
-                <h1 className="text-2xl font-semibold">Imports</h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    Upload an Excel file of users, review it, then push it to a ZKTeco device.
-                </p>
-            </header>
+            <Toolbar>
+                <span className="text-[13px] font-semibold">Imports</span>
+                <span className="rounded-sm bg-muted px-1.5 text-[11px] tabular-nums text-muted-foreground">
+                    {batches.length}
+                </span>
 
-            <Card>
-                <CardHeader className="flex-row items-center justify-between space-y-0">
-                    <CardTitle className="text-sm">Upload a user file</CardTitle>
-                    <a href="/template" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
-                        <Download className="size-4" />
-                        Download template
-                    </a>
-                </CardHeader>
-                <CardContent>
+                <div className="ms-auto flex items-center gap-2">
+                    <Segmented
+                        value={filter}
+                        onChange={setFilter}
+                        options={[
+                            { label: 'All', value: 'all' },
+                            { label: 'Pending', value: 'pending' },
+                            { label: 'Done', value: 'done' },
+                            { label: 'Failed', value: 'failed' },
+                        ]}
+                    />
+                    <Button variant="outline" size="sm" asChild>
+                        <a href="/template">
+                            <Download className="size-4" /> Template
+                        </a>
+                    </Button>
+                </div>
+            </Toolbar>
+
+            <PageScroll className="flex flex-col">
+                {/* Upload band */}
+                <div className="border-b border-border p-3">
                     <label
-                        className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 text-center transition-all ${
+                        className={cn(
+                            'flex cursor-pointer items-center justify-center gap-3 rounded-md border border-dashed px-4 py-4 text-center transition-colors',
                             dragOver
-                                ? 'scale-[1.01] border-primary bg-secondary ring-2 ring-primary/20'
-                                : 'border-border hover:border-muted-foreground/40'
-                        }`}
+                                ? 'border-accent-brand bg-accent-brand/5'
+                                : 'border-border hover:border-border-strong hover:bg-accent/40',
+                        )}
                         onDragOver={(event) => {
                             event.preventDefault();
                             setDragOver(true);
@@ -91,13 +130,15 @@ export default function ImportIndex({ batches, devices }: Props) {
                         onDragLeave={() => setDragOver(false)}
                         onDrop={onDrop}
                     >
-                        <UploadCloud className={`size-8 ${dragOver ? 'animate-bounce text-primary' : 'text-muted-foreground'}`} />
-                        <p className="mt-3 text-sm">
-                            <span className="font-medium text-primary">Choose a file</span> or drag it here
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                            .xlsx, .xls or .csv — columns: user_id, name, password, card_number, privilege
-                        </p>
+                        <UploadCloud className={cn('size-5 shrink-0', dragOver ? 'text-accent-brand' : 'text-muted-foreground')} />
+                        <div className="text-start">
+                            <p className="text-[13px]">
+                                <span className="font-medium text-accent-brand">Choose a file</span> or drag it here
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                                .xlsx, .xls or .csv — user_id, name, password, card_number, privilege
+                            </p>
+                        </div>
                         <input
                             ref={inputRef}
                             type="file"
@@ -108,9 +149,9 @@ export default function ImportIndex({ batches, devices }: Props) {
                     </label>
 
                     {file && (
-                        <div className="mt-4 flex items-center justify-between rounded-lg bg-secondary px-4 py-3">
-                            <span className="truncate text-sm">{file.name}</span>
-                            <Button onClick={submit} disabled={processing}>
+                        <div className="mt-2 flex items-center justify-between gap-3 rounded-md bg-muted px-3 py-1.5">
+                            <span className="selectable truncate text-[13px]">{file.name}</span>
+                            <Button size="sm" onClick={submit} disabled={processing}>
                                 {processing ? (
                                     <span className="inline-flex items-center gap-1.5">
                                         <ConnectingDots /> Importing
@@ -123,7 +164,7 @@ export default function ImportIndex({ batches, devices }: Props) {
                     )}
 
                     {devices.length === 0 && (
-                        <p className="mt-4 text-sm text-amber-600">
+                        <p className="mt-2 text-[12px] text-warning">
                             No devices yet.{' '}
                             <Link href="/devices" className="font-medium underline">
                                 Add a device
@@ -131,68 +172,63 @@ export default function ImportIndex({ batches, devices }: Props) {
                             before you can sync.
                         </p>
                     )}
-                </CardContent>
-            </Card>
+                </div>
 
-            <section className="mt-8">
-                <h2 className="mb-3 text-sm font-semibold">Recent imports</h2>
-
-                {batches.length === 0 ? (
-                    <div className="rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted-foreground">
-                        No imports yet. Upload a file to get started.
+                {/* Recent imports */}
+                {filtered.length === 0 ? (
+                    <div className="flex flex-1 items-center justify-center p-10 text-center text-[13px] text-muted-foreground">
+                        {batches.length === 0 ? 'No imports yet. Upload a file to get started.' : 'No imports match this filter.'}
                     </div>
                 ) : (
-                    <Card className="overflow-hidden">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>File</TableHead>
-                                    <TableHead>Rows</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Device</TableHead>
-                                    <TableHead>Imported</TableHead>
-                                    <TableHead />
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>File</TableHead>
+                                <TableHead>Rows</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Device</TableHead>
+                                <TableHead>Imported</TableHead>
+                                <TableHead />
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filtered.map((batch) => (
+                                <TableRow key={batch.id}>
+                                    <TableCell>
+                                        <Link
+                                            href={`/import/${batch.id}`}
+                                            className="font-medium hover:text-accent-brand hover:underline"
+                                        >
+                                            {batch.original_filename}
+                                        </Link>
+                                    </TableCell>
+                                    <TableCell className="tabular-nums">
+                                        <span className="text-success">{batch.valid_rows} valid</span>
+                                        {batch.invalid_rows > 0 && (
+                                            <span className="text-danger"> · {batch.invalid_rows} invalid</span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell>
+                                        <StatusBadge status={batch.status} />
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">{batch.device?.name ?? '—'}</TableCell>
+                                    <TableCell className="text-muted-foreground">{formatDate(batch.created_at)}</TableCell>
+                                    <TableCell className="text-end">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="text-muted-foreground opacity-0 hover:text-danger group-hover:opacity-100"
+                                            onClick={() => remove(batch)}
+                                        >
+                                            <Trash2 className="size-4" />
+                                        </Button>
+                                    </TableCell>
                                 </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {batches.map((batch) => (
-                                    <TableRow key={batch.id}>
-                                        <TableCell>
-                                            <Link
-                                                href={`/import/${batch.id}`}
-                                                className="font-medium hover:text-primary hover:underline"
-                                            >
-                                                {batch.original_filename}
-                                            </Link>
-                                        </TableCell>
-                                        <TableCell className="text-muted-foreground">
-                                            <span className="text-emerald-600">{batch.valid_rows} valid</span>
-                                            {batch.invalid_rows > 0 && (
-                                                <span className="text-rose-500"> · {batch.invalid_rows} invalid</span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <StatusBadge status={batch.status} />
-                                        </TableCell>
-                                        <TableCell className="text-muted-foreground">{batch.device?.name ?? '—'}</TableCell>
-                                        <TableCell className="text-muted-foreground">{formatDate(batch.created_at)}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="text-muted-foreground hover:text-destructive"
-                                                onClick={() => remove(batch)}
-                                            >
-                                                <Trash2 className="size-4" />
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </Card>
+                            ))}
+                        </TableBody>
+                    </Table>
                 )}
-            </section>
-        </>
+            </PageScroll>
+        </Page>
     );
 }

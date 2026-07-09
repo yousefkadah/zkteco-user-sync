@@ -1,27 +1,65 @@
+import { type ReactNode } from 'react';
+
 import { cn } from '@/lib/utils';
 
-const STATUS_CLASSES: Record<string, string> = {
-    parsed: 'bg-muted text-muted-foreground',
-    pending: 'bg-muted text-muted-foreground',
-    syncing: 'bg-blue-100 text-blue-700',
-    synced: 'bg-emerald-100 text-emerald-700',
-    completed: 'bg-emerald-100 text-emerald-700',
-    failed: 'bg-rose-100 text-rose-700',
-    skipped: 'bg-amber-100 text-amber-700',
+type Tone = 'idle' | 'info' | 'success' | 'warning' | 'danger';
+
+const TONE_CLASSES: Record<Tone, string> = {
+    idle: 'bg-idle-soft text-idle',
+    info: 'bg-info-soft text-info',
+    success: 'bg-success-soft text-success',
+    warning: 'bg-warning-soft text-warning',
+    danger: 'bg-danger-soft text-danger',
 };
 
-export function StatusBadge({ status }: { status: string }) {
-    const classes = STATUS_CLASSES[status] ?? 'bg-muted text-muted-foreground';
-    const label = status ? status.charAt(0).toUpperCase() + status.slice(1) : '—';
+const DOT_CLASSES: Record<Tone, string> = {
+    idle: 'bg-idle',
+    info: 'bg-info',
+    success: 'bg-success',
+    warning: 'bg-warning',
+    danger: 'bg-danger',
+};
+
+const STATUS_TONE: Record<string, Tone> = {
+    parsed: 'idle',
+    pending: 'warning',
+    syncing: 'info',
+    synced: 'success',
+    completed: 'success',
+    failed: 'danger',
+    skipped: 'idle',
+};
+
+interface Props {
+    /** A sync/import status key (maps to a tone), used when no explicit tone is given. */
+    status?: string;
+    /** Override the tone explicitly (e.g. an Admin role pill). */
+    tone?: Tone;
+    /** Custom label; defaults to a title-cased status. */
+    children?: ReactNode;
+    className?: string;
+}
+
+/** A dot + label pill with dark-aware semantic tones. */
+export function StatusBadge({ status, tone, children, className }: Props) {
+    const resolved: Tone = tone ?? (status ? STATUS_TONE[status] ?? 'idle' : 'idle');
+    const label = children ?? (status ? status.charAt(0).toUpperCase() + status.slice(1) : '—');
 
     return (
         <span
             className={cn(
-                'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium',
-                classes,
+                'inline-flex w-fit items-center gap-1 rounded-sm px-1.5 py-0 text-[11px] font-medium',
+                TONE_CLASSES[resolved],
+                className,
             )}
         >
-            {status === 'syncing' && <span className="size-1.5 animate-pulse rounded-full bg-blue-500" />}
+            <span
+                className={cn(
+                    'size-1.5 shrink-0 rounded-full',
+                    DOT_CLASSES[resolved],
+                    status === 'syncing' && 'animate-pulse',
+                )}
+            />
             {label}
         </span>
     );

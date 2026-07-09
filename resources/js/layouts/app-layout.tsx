@@ -1,23 +1,23 @@
-import { type ReactNode, useEffect } from 'react';
-import { Link, usePage } from '@inertiajs/react';
-import { Monitor, Upload } from 'lucide-react';
+import { type ReactNode, useEffect, useState } from 'react';
+import { usePage } from '@inertiajs/react';
 import { toast } from 'sonner';
 
-import { AppLogo } from '@/components/app-logo';
 import { Toaster } from '@/components/ui/sonner';
-import { cn } from '@/lib/utils';
+import { Titlebar } from '@/components/shell/titlebar';
+import { SidebarRail } from '@/components/shell/sidebar-rail';
+import { StatusBar } from '@/components/shell/status-bar';
+import { CommandPalette } from '@/components/shell/command-palette';
+import { ShellStatusProvider } from '@/components/shell/shell-status';
+import { NAVIGATION } from '@/components/shell/nav';
 import type { SharedPageProps } from '@/types';
-
-const NAVIGATION = [
-    { label: 'Imports', href: '/', icon: Upload, isActive: (path: string) => path === '/' || path.startsWith('/import') },
-    { label: 'Devices', href: '/devices', icon: Monitor, isActive: (path: string) => path.startsWith('/devices') },
-];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
     const page = usePage<SharedPageProps>();
-    const currentPath = page.url.split('?')[0];
     const flash = page.props.flash;
     const version = page.props.app?.version ?? '';
+    const isMac = page.props.app?.platform === 'darwin';
+
+    const [paletteOpen, setPaletteOpen] = useState(false);
 
     useEffect(() => {
         if (flash?.success) {
@@ -27,59 +27,40 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         }
     }, [flash?.success, flash?.error]);
 
-    const renderNav = (labelClass: string) =>
-        NAVIGATION.map((item) => {
-            const active = item.isActive(currentPath);
-            const Icon = item.icon;
+    // ⌘K / Ctrl+K — but never hijack typing inside a field.
+    useEffect(() => {
+        const onKey = (event: KeyboardEvent) => {
+            const target = event.target as HTMLElement | null;
+            const editing =
+                target?.tagName === 'INPUT' ||
+                target?.tagName === 'TEXTAREA' ||
+                target?.isContentEditable;
 
-            return (
-                <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                        'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                        active
-                            ? 'bg-secondary text-secondary-foreground'
-                            : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
-                    )}
-                >
-                    <Icon className="size-4 shrink-0" />
-                    <span className={labelClass}>{item.label}</span>
-                </Link>
-            );
-        });
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k' && !editing) {
+                event.preventDefault();
+                setPaletteOpen((open) => !open);
+            }
+        };
+
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
 
     return (
-        <div className="flex min-h-screen flex-col lg:flex-row">
-            {/* Sidebar — large screens */}
-            <aside className="hidden border-r bg-card px-4 py-6 lg:flex lg:w-60 lg:shrink-0 lg:flex-col">
-                <div className="flex items-center gap-2 px-2">
-                    <AppLogo className="size-9" />
-                    <div className="leading-tight">
-                        <p className="text-sm font-semibold">ZKTeco</p>
-                        <p className="text-xs text-muted-foreground">User Sync</p>
-                    </div>
+        <ShellStatusProvider>
+            <div className="grid h-screen grid-rows-[var(--titlebar-h)_1fr_var(--statusbar-h)] overflow-hidden bg-window text-foreground">
+                <Titlebar isMac={isMac} onOpenPalette={() => setPaletteOpen(true)} />
+
+                <div className="grid min-h-0 grid-cols-[var(--sidebar-w)_1fr] overflow-hidden">
+                    <SidebarRail nav={NAVIGATION} />
+                    <main className="min-h-0 overflow-hidden bg-background">{children}</main>
                 </div>
 
-                <nav className="mt-8 flex flex-col gap-1">{renderNav('')}</nav>
-
-                <div className="mt-auto px-2 text-xs text-muted-foreground">v{version}</div>
-            </aside>
-
-            {/* Top bar — small / medium screens */}
-            <header className="flex items-center justify-between gap-3 border-b bg-card px-4 py-3 lg:hidden">
-                <div className="flex items-center gap-2">
-                    <AppLogo className="size-8" />
-                    <span className="text-sm font-semibold">ZKTeco User Sync</span>
-                </div>
-                <nav className="flex items-center gap-1">{renderNav('hidden sm:inline')}</nav>
-            </header>
-
-            <div className="flex min-w-0 flex-1 flex-col">
-                <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
+                <StatusBar version={version} />
             </div>
 
-            <Toaster position="bottom-right" richColors />
-        </div>
+            <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} nav={NAVIGATION} />
+            <Toaster position="top-center" richColors closeButton />
+        </ShellStatusProvider>
     );
 }
