@@ -84,17 +84,21 @@ jobs:
         shell: bash
         run: |
           mkdir -p artifact
-          pick() { find . -name "$1" -not -path '*/node_modules/*' 2>/dev/null | head -1; }
+          # Pick the REAL installer (>40MB), skipping helper stubs like NSIS elevate.exe (~9KB).
+          big() { find . -name "$1" -not -path '*/node_modules/*' -size +40M 2>/dev/null | head -1; }
           case "${{ matrix.target }}" in
             mac)
-              f=$(pick '*.dmg');      [ -n "$f" ] && cp "$f" "artifact/ZKTeco-User-Sync-mac-arm64.dmg" ;;
+              f=$(big '*.dmg'); [ -n "$f" ] && cp "$f" "artifact/ZKTeco-User-Sync-mac-arm64.dmg" ;;
             win)
-              f=$(pick '*.exe');      [ -n "$f" ] && cp "$f" "artifact/ZKTeco-User-Sync-win-x64.exe" ;;
+              # Prefer the named NSIS installer ("... Setup ....exe"); fall back to the largest .exe.
+              f=$(find . -iname '*setup*.exe' -not -path '*/node_modules/*' 2>/dev/null | head -1)
+              [ -z "$f" ] && f=$(big '*.exe')
+              [ -n "$f" ] && cp "$f" "artifact/ZKTeco-User-Sync-win-x64.exe" ;;
             linux)
-              a=$(pick '*.AppImage'); [ -n "$a" ] && cp "$a" "artifact/ZKTeco-User-Sync-linux-x86_64.AppImage"
-              d=$(pick '*.deb');      [ -n "$d" ] && cp "$d" "artifact/ZKTeco-User-Sync-linux-amd64.deb" ;;
+              a=$(big '*.AppImage'); [ -n "$a" ] && cp "$a" "artifact/ZKTeco-User-Sync-linux-x86_64.AppImage"
+              d=$(big '*.deb');      [ -n "$d" ] && cp "$d" "artifact/ZKTeco-User-Sync-linux-amd64.deb" ;;
           esac
-          ls -la artifact
+          echo "collected:"; ls -la artifact
           if [ -z "$(ls -A artifact 2>/dev/null)" ]; then echo 'No installer produced'; exit 1; fi
 
       - uses: actions/upload-artifact@v4
