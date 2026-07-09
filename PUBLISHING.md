@@ -38,6 +38,14 @@ NATIVEPHP_APPLE_TEAM_ID="XXXXXXXXXX"
 `notarytool` automatically. Without notarization the app shows *"is damaged and
 can't be opened"* on other Macs.
 
+> **Testing an unsigned build locally:** with no cert, the built `.app` gets an
+> inconsistent ad-hoc signature and crashes at launch (`dyld: … Electron Framework
+> … different Team IDs`). To run it on the build machine only, re-sign the whole
+> bundle consistently:
+> `codesign --remove-signature "…app" && codesign --force --deep --sign - "…app"`.
+> This is a local-testing workaround — real distribution still needs the Developer
+> ID signing + notarization above.
+
 ### Windows — signed `.exe`
 Recommended: **Azure Trusted Signing** (cloud, no local cert). In `.env`:
 
