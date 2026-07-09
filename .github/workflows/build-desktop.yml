@@ -41,7 +41,8 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          # 8.4 — the composer.lock resolved to Symfony 8.1 (requires php >=8.4.1).
+          php-version: '8.4'
           extensions: zip, intl, sockets, fileinfo, mbstring, curl, openssl, gd, exif, pdo_sqlite
           tools: composer
 

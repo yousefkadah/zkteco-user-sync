@@ -30,12 +30,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # php-bin ships win-x64 static binaries for 8.3; the packaged app runs on
-      # that bundled runtime. All app deps support ^8.3.
+      # The packaged app runs on the php-bin static runtime bundled by NativePHP.
+      # This CI PHP is only used to run composer + artisan during the build; it
+      # must be 8.4 because composer.lock resolved to Symfony 8.1 (php >=8.4.1).
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: zip, intl, sockets, fileinfo, mbstring, curl, openssl, gd, exif, pdo_sqlite
           tools: composer
 
