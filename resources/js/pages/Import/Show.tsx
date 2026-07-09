@@ -126,7 +126,7 @@ export default function ImportShow({ batch, users, devices }: Props) {
                             </p>
                         )}
                     </div>
-                    <Button onClick={sync} disabled={!canSync || !deviceId} size="lg">
+                    <Button onClick={sync} disabled={!canSync || !deviceId} size="lg" className="w-full sm:w-auto">
                         <RefreshCw className={cn('size-4', isSyncing && 'animate-spin')} />
                         {isSyncing ? 'Syncing…' : `Sync ${batch.valid_rows} users`}
                     </Button>

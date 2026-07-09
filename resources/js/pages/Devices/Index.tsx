@@ -159,14 +159,14 @@ export default function DevicesIndex({ devices }: Props) {
         <>
             <Head title="Devices" />
 
-            <header className="mb-6 flex items-center justify-between">
+            <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-semibold">Devices</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
                         ZKTeco terminals reachable on your local network (default port 4370).
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <Button variant="outline" onClick={scan} disabled={scanning}>
                         {scanning ? <Loader2 className="size-4 animate-spin" /> : <Wifi className="size-4" />}
                         {scanning ? 'Scanning…' : 'Scan network'}
