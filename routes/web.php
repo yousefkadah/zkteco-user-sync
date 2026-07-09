@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [ImportController::class, 'index'])->name('import.index');
 Route::post('/import', [ImportController::class, 'store'])->name('import.store');
 Route::get('/import/{batch}', [ImportController::class, 'show'])->name('import.show');
+Route::get('/import/{batch}/transfer', [ImportController::class, 'transfer'])->name('import.transfer');
 Route::delete('/import/{batch}', [ImportController::class, 'destroy'])->name('import.destroy');
 Route::post('/import/{batch}/sync', [SyncController::class, 'store'])->name('import.sync');
 Route::post('/import/{batch}/users', [ImportController::class, 'storeUser'])->name('import.users.store');

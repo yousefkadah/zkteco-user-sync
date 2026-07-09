@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Pencil, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -142,9 +142,19 @@ export default function ImportShow({ batch, users, devices }: Props) {
                 <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
                     <ArrowLeft className="size-4" /> Imports
                 </Link>
-                <div className="mt-2 flex items-center gap-3">
-                    <h1 className="text-2xl font-semibold">{batch.original_filename}</h1>
-                    <StatusBadge status={batch.status} />
+                <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-2xl font-semibold">{batch.original_filename}</h1>
+                        <StatusBadge status={batch.status} />
+                    </div>
+                    {batch.valid_rows > 0 && (
+                        <Button asChild size="lg" className="w-full sm:w-auto">
+                            <Link href={`/import/${batch.id}/transfer`}>
+                                <Send className="size-4" /> Send to device
+                                <ArrowRight className="size-4" />
+                            </Link>
+                        </Button>
+                    )}
                 </div>
             </div>
 

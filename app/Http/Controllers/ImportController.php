@@ -109,6 +109,30 @@ class ImportController extends Controller
         return redirect()->route('import.index')->with('success', 'Import deleted.');
     }
 
+    public function transfer(ImportBatch $batch): Response
+    {
+        $batch->load('device:id,name');
+
+        $users = $batch->users()
+            ->where('is_valid', true)
+            ->orderBy('row_number')
+            ->limit(500)
+            ->get()
+            ->map(fn (ImportedUser $user) => [
+                'id' => $user->id,
+                'user_id' => $user->user_id,
+                'name' => $user->name,
+                'sync_status' => $user->sync_status,
+                'sync_error' => $user->sync_error,
+            ]);
+
+        return Inertia::render('Import/Transfer', [
+            'batch' => $this->batchSummary($batch),
+            'users' => $users,
+            'devices' => Device::orderBy('name')->get(['id', 'name', 'ip_address', 'last_connection_ok']),
+        ]);
+    }
+
     public function storeUser(ImportBatch $batch, ImportedUserRequest $request, ImportedUserValidator $validator): RedirectResponse
     {
         $data = $validator->validate(
