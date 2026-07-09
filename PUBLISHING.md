@@ -59,33 +59,43 @@ No signing required. Ship the AppImage (runs anywhere) and/or the `.deb`.
 
 ---
 
-## 2. Microsoft Store — **feasible** (MSIX)
+## 2. Microsoft Store — **wired up** (MSIX)
 
-Verdict: **doable.** Package as an **MSIX full-trust "packaged desktop app"**
-(Desktop Bridge). Full-trust means it runs *outside* the UWP sandbox with normal
-Win32 rights — so the **bundled PHP binary, the queue-worker child process, and
-raw UDP on port 4370 all keep working**.
+The Store target is **implemented** in this repo:
 
-Because NativePHP's build config only targets NSIS, this is a **manual override**:
+- **`build/msix/electron-builder.appx.mjs`** — a full-trust MSIX build config
+  (derived from NativePHP's config with `win.target: ['appx']`). MSIX runs
+  full-trust — electron-builder fixes `EntryPoint="Windows.FullTrustApplication"`
+  and injects `runFullTrust` — so the **bundled PHP binary + child processes +
+  UDP 4370 keep working**.
+- **`.github/workflows/build-msix.yml`** — a Windows CI job that produces the
+  `.msix` for you (MSIX packaging is Windows-only, so you don't need a Windows PC).
 
-1. **Partner Center account** — *Individual* is **free** (as of 2025; ID + selfie
-   verification) or *Company* (~$99 one-time). Reserve the app name; note the
-   assigned **Package Identity Name / Publisher (`CN=…`) / PublisherDisplayName**.
-2. On a Windows 10/11 machine with the Windows SDK, produce an **MSIX**: either
-   `electron-builder` with `win.target: "appx"` + an `appx` config block, or
-   Electron Forge's MSIX maker with a hand-authored `Package.appxmanifest`.
-   (This requires overriding NativePHP's bundled electron-builder config.)
-3. In the manifest: `<Application EntryPoint="Windows.FullTrustApplication">` and
-   declare `runFullTrust`; add `internetClientServer` + `privateNetworkClientServer`.
-4. Set Identity Name / Publisher / PublisherDisplayName to **exactly** match
-   Partner Center.
-5. **Disable the auto-updater** for the Store build (the Store updates you).
-6. Dev-sign locally, `Add-AppxPackage`, and **smoke-test**: app launches, spawns
-   PHP, and reaches a device on UDP 4370.
-7. Run **WACK** (Windows App Certification Kit) and fix findings.
-8. Create the submission, upload the `.msix` (the Store re-signs), justify
-   `runFullTrust` as an Electron/Desktop-Bridge app, and submit. Budget extra
-   review time for the restricted capability.
+### Steps
+
+1. **Open a Partner Center account** — *Individual* is **free** (2025; ID + selfie)
+   or *Company* (~$99 one-time). Create the app, reserve the name, open
+   **Product → Product identity**, and copy three values:
+   - Package/Identity **Name** → `MSIX_IDENTITY_NAME`
+   - **Publisher** (`CN=…`) → `MSIX_PUBLISHER`
+   - **Publisher display name** → `MSIX_PUBLISHER_DISPLAY_NAME`
+2. In GitHub → **Settings → Secrets and variables → Actions → Variables**, add
+   those three as repository **Variables**.
+3. Run **Actions → “Build MSIX (Microsoft Store)” → Run workflow** (or push a
+   `v*` tag). Download the **`windows-msix`** artifact — that's your unsigned
+   `.msix` (the Store re-signs it).
+4. In Partner Center, create a submission, **upload the `.msix`**, and on the
+   *Submission options* page justify **`runFullTrust`** as an Electron/Desktop-Bridge
+   app and describe the **LAN UDP (port 4370)** device networking.
+5. Submit for certification. On approval the Store signs & distributes with
+   automatic updates. (Budget extra review time for the restricted capability.)
+
+> Notes: CI pins **PHP 8.3** (php-bin ships a win-x64 static binary for it; all
+> app deps support `^8.3`), sets `CSC_IDENTITY_AUTO_DISCOVERY=false` for an
+> unsigned package, and adds the Windows SDK to PATH so `makeappx.exe` is found.
+> If you upgrade `nativephp/desktop`, re-sync `build/msix/electron-builder.appx.mjs`
+> with the vendored config. If the first CI run surfaces a path/manifest issue,
+> send the log and I'll adjust.
 
 ---
 
