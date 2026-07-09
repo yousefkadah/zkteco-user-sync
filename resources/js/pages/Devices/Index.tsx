@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from 'react';
-import { Head, router } from '@inertiajs/react';
-import { Check, Loader2, Plus, Wifi } from 'lucide-react';
+import { Head, Link, router } from '@inertiajs/react';
+import { Check, Loader2, Pencil, Plus, Trash2, Users, Wifi } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -288,7 +288,12 @@ export default function DevicesIndex({ devices }: Props) {
                                 </div>
                             </dl>
 
-                            <div className="mt-5 flex gap-2">
+                            <div className="mt-5 flex flex-wrap gap-2">
+                                <Button asChild className="flex-1">
+                                    <Link href={`/devices/${device.id}/users`}>
+                                        <Users className="size-4" /> View users
+                                    </Link>
+                                </Button>
                                 <Button
                                     variant="outline"
                                     className="flex-1"
@@ -297,15 +302,17 @@ export default function DevicesIndex({ devices }: Props) {
                                 >
                                     {testingId === device.id ? 'Testing…' : 'Test connection'}
                                 </Button>
-                                <Button variant="outline" onClick={() => openEdit(device)}>
-                                    Edit
+                                <Button variant="outline" size="icon" onClick={() => openEdit(device)} title="Edit">
+                                    <Pencil className="size-4" />
                                 </Button>
                                 <Button
                                     variant="outline"
+                                    size="icon"
                                     className="text-destructive hover:text-destructive"
                                     onClick={() => remove(device)}
+                                    title="Delete"
                                 >
-                                    Delete
+                                    <Trash2 className="size-4" />
                                 </Button>
                             </div>
                         </Card>

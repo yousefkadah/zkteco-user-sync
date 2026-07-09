@@ -53,6 +53,65 @@ class ZktecoDeviceService
     }
 
     /**
+     * Read the users currently stored on the device.
+     *
+     * @return array{ok: bool, error?: string, users: list<array<string, mixed>>, count: int}
+     */
+    public function listUsers(Device $device): array
+    {
+        $zk = $this->factory->make($device);
+        $ok = false;
+
+        try {
+            if (! $zk->connect()) {
+                return ['ok' => false, 'error' => 'Could not connect. Check the IP, port and that the device is on this network.', 'users' => [], 'count' => 0];
+            }
+
+            $users = $this->normaliseDeviceUsers($zk->getUsers());
+            $ok = true;
+
+            return ['ok' => true, 'users' => $users, 'count' => count($users)];
+        } catch (Throwable $e) {
+            return ['ok' => false, 'error' => $e->getMessage(), 'users' => [], 'count' => 0];
+        } finally {
+            $this->safe(fn () => $zk->disconnect());
+            $device->update(['last_connected_at' => now(), 'last_connection_ok' => $ok]);
+        }
+    }
+
+    /**
+     * @param  array<int|string, array<string, mixed>>  $raw
+     * @return list<array<string, mixed>>
+     */
+    private function normaliseDeviceUsers(array $raw): array
+    {
+        $users = [];
+
+        foreach ($raw as $row) {
+            $role = (int) ($row['role'] ?? 0);
+            $card = ltrim(trim((string) ($row['card_no'] ?? '')), '0');
+
+            $users[] = [
+                'uid' => (int) ($row['uid'] ?? 0),
+                'user_id' => trim((string) ($row['user_id'] ?? '')),
+                'name' => trim((string) ($row['name'] ?? '')),
+                'role' => $role,
+                'role_label' => match ($role) {
+                    Util::LEVEL_ADMIN => 'Admin',
+                    Util::LEVEL_USER => 'User',
+                    default => 'Role '.$role,
+                },
+                'password' => trim((string) ($row['password'] ?? '')),
+                'card_no' => $card !== '' ? $card : null,
+            ];
+        }
+
+        usort($users, fn (array $a, array $b): int => $a['uid'] <=> $b['uid']);
+
+        return $users;
+    }
+
+    /**
      * Push every valid user in the batch to the device, recording per-row results.
      */
     public function syncBatch(ImportBatch $batch, Device $device): void

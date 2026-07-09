@@ -83,6 +83,19 @@ class DeviceController extends Controller
         return response()->json(['devices' => $devices]);
     }
 
+    public function users(Device $device, ZktecoDeviceService $service): Response
+    {
+        return Inertia::render('Devices/Users', [
+            'device' => [
+                'id' => $device->id,
+                'name' => $device->name,
+                'ip_address' => $device->ip_address,
+                'port' => $device->port,
+            ],
+            'result' => $service->listUsers($device),
+        ]);
+    }
+
     public function test(Device $device, ZktecoDeviceService $service): RedirectResponse
     {
         $result = $service->testConnection($device);
