@@ -28,8 +28,6 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             $window->titleBarHiddenInset()
                 ->trafficLightPosition(16, 14); // vertically centered in the 44px titlebar band
         }
-
-        $window->showDockIcon();
     }
 
     /**
