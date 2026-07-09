@@ -49,6 +49,14 @@ jobs:
       - name: Install PHP dependencies
         run: composer install --no-interaction --prefer-dist --no-progress --optimize-autoloader
 
+      # native:build bundles the app's .env into the package (BuildCommand reads it);
+      # .env is gitignored, so create one from the example + an app key on CI.
+      - name: Prepare Laravel environment
+        shell: bash
+        run: |
+          cp .env.example .env
+          php artisan key:generate --no-interaction
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
