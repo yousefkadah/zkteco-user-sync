@@ -87,3 +87,36 @@
         @apply bg-background text-foreground;
     }
 }
+
+.sync-dot {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    height: 0.5rem;
+    width: 0.5rem;
+    margin-top: -0.25rem;
+    border-radius: 9999px;
+    background-color: var(--primary);
+    animation: sync-dot-flow 1.6s linear infinite;
+}
+
+@keyframes sync-dot-flow {
+    0% {
+        left: -4%;
+        opacity: 0;
+        transform: scale(0.6);
+    }
+    12% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    88% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    100% {
+        left: 100%;
+        opacity: 0;
+        transform: scale(0.6);
+    }
+}

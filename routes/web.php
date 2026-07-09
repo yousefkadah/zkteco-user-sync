@@ -13,6 +13,9 @@ Route::post('/import', [ImportController::class, 'store'])->name('import.store')
 Route::get('/import/{batch}', [ImportController::class, 'show'])->name('import.show');
 Route::delete('/import/{batch}', [ImportController::class, 'destroy'])->name('import.destroy');
 Route::post('/import/{batch}/sync', [SyncController::class, 'store'])->name('import.sync');
+Route::post('/import/{batch}/users', [ImportController::class, 'storeUser'])->name('import.users.store');
+Route::put('/import/{batch}/users/{user}', [ImportController::class, 'updateUser'])->name('import.users.update');
+Route::delete('/import/{batch}/users/{user}', [ImportController::class, 'destroyUser'])->name('import.users.destroy');
 
 Route::get('/devices', [DeviceController::class, 'index'])->name('devices.index');
 Route::get('/devices/scan', [DeviceController::class, 'scan'])->name('devices.scan');

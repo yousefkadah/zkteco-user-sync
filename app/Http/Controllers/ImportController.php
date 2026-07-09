@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ImportedUserRequest;
 use App\Http\Requests\StoreImportRequest;
 use App\Models\Device;
 use App\Models\ImportBatch;
 use App\Models\ImportedUser;
+use App\Services\Import\ImportedUserValidator;
 use App\Services\Import\UserSpreadsheetParser;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -105,6 +107,120 @@ class ImportController extends Controller
         $batch->delete();
 
         return redirect()->route('import.index')->with('success', 'Import deleted.');
+    }
+
+    public function storeUser(ImportBatch $batch, ImportedUserRequest $request, ImportedUserValidator $validator): RedirectResponse
+    {
+        $data = $validator->validate(
+            $request->input('user_id'),
+            $request->input('name'),
+            $request->input('password'),
+            $request->input('card_number'),
+            $request->input('privilege'),
+        );
+
+        $batch->users()->create([
+            'row_number' => (int) $batch->users()->max('row_number') + 1,
+            'user_id' => $data['user_id'],
+            'name' => $data['name'],
+            'name_ascii' => $data['name_ascii'],
+            'password' => $data['password'],
+            'card_number' => $data['card_number'],
+            'privilege' => $data['privilege'],
+            'is_valid' => $data['is_valid'],
+            'validation_errors' => $data['errors'] ?: null,
+            'sync_status' => ImportedUser::SYNC_PENDING,
+        ]);
+
+        $this->revalidate($batch, $validator);
+
+        return back()->with('success', 'User added.');
+    }
+
+    public function updateUser(ImportBatch $batch, ImportedUser $user, ImportedUserRequest $request, ImportedUserValidator $validator): RedirectResponse
+    {
+        abort_unless($user->import_batch_id === $batch->id, 404);
+
+        $data = $validator->validate(
+            $request->input('user_id'),
+            $request->input('name'),
+            $request->input('password'),
+            $request->input('card_number'),
+            $request->input('privilege'),
+        );
+
+        $user->update([
+            'user_id' => $data['user_id'],
+            'name' => $data['name'],
+            'name_ascii' => $data['name_ascii'],
+            'password' => $data['password'],
+            'card_number' => $data['card_number'],
+            'privilege' => $data['privilege'],
+            'is_valid' => $data['is_valid'],
+            'validation_errors' => $data['errors'] ?: null,
+            'sync_status' => ImportedUser::SYNC_PENDING,
+            'sync_error' => null,
+            'device_uid' => null,
+        ]);
+
+        $this->revalidate($batch, $validator);
+
+        return back()->with('success', 'User updated.');
+    }
+
+    public function destroyUser(ImportBatch $batch, ImportedUser $user, ImportedUserValidator $validator): RedirectResponse
+    {
+        abort_unless($user->import_batch_id === $batch->id, 404);
+
+        $user->delete();
+
+        $this->revalidate($batch, $validator);
+
+        return back()->with('success', 'User removed.');
+    }
+
+    /**
+     * Re-run field validation + duplicate detection across every row and refresh
+     * the batch counts. Called after any manual add / edit / delete.
+     */
+    private function revalidate(ImportBatch $batch, ImportedUserValidator $validator): void
+    {
+        $seen = [];
+        $validCount = 0;
+        $total = 0;
+
+        foreach ($batch->users()->orderBy('row_number')->get() as $user) {
+            $total++;
+
+            $data = $validator->validate($user->user_id, $user->name, $user->password, $user->card_number, $user->privilege);
+            $errors = $data['errors'];
+
+            if ($data['is_valid'] && $data['user_id'] !== '') {
+                if (isset($seen[$data['user_id']])) {
+                    $errors[] = 'Duplicate user id (row '.$seen[$data['user_id']].').';
+                } else {
+                    $seen[$data['user_id']] = $user->row_number;
+                }
+            }
+
+            $isValid = $errors === [];
+
+            if ($isValid) {
+                $validCount++;
+            }
+
+            $user->update([
+                'name_ascii' => $data['name_ascii'],
+                'is_valid' => $isValid,
+                'validation_errors' => $errors ?: null,
+            ]);
+        }
+
+        $batch->update([
+            'total_rows' => $total,
+            'valid_rows' => $validCount,
+            'invalid_rows' => $total - $validCount,
+        ]);
     }
 
     /**

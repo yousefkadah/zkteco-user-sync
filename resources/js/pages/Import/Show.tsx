@@ -1,19 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatusBadge } from '@/components/status-badge';
+import { SyncFlow } from '@/components/sync-flow';
 import { cn } from '@/lib/utils';
 import type { BatchSummary, DeviceLite, ImportedUserRow, Paginated } from '@/types';
 
@@ -23,16 +26,32 @@ interface Props {
     devices: DeviceLite[];
 }
 
+interface UserForm {
+    user_id: string;
+    name: string;
+    password: string;
+    card_number: string;
+    privilege: string;
+}
+
+const EMPTY_USER: UserForm = { user_id: '', name: '', password: '', card_number: '', privilege: 'user' };
+
 export default function ImportShow({ batch, users, devices }: Props) {
-    const [deviceId, setDeviceId] = useState<string>(
-        String(batch.device?.id ?? devices[0]?.id ?? ''),
-    );
+    const [deviceId, setDeviceId] = useState<string>(String(batch.device?.id ?? devices[0]?.id ?? ''));
     const timer = useRef<number | null>(null);
+
+    const [userDialogOpen, setUserDialogOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<ImportedUserRow | null>(null);
+    const [form, setForm] = useState<UserForm>(EMPTY_USER);
+    const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+    const [saving, setSaving] = useState(false);
 
     const isSyncing = batch.status === 'syncing';
     const processed = batch.synced_count + batch.failed_count;
     const percent = batch.valid_rows ? Math.min(100, Math.round((processed / batch.valid_rows) * 100)) : 0;
     const canSync = devices.length > 0 && batch.valid_rows > 0 && !isSyncing;
+    const showFlow = isSyncing || batch.status === 'completed' || batch.status === 'failed';
+    const deviceName = batch.device?.name ?? devices.find((device) => String(device.id) === deviceId)?.name;
 
     useEffect(() => {
         if (isSyncing) {
@@ -54,11 +73,56 @@ export default function ImportShow({ batch, users, devices }: Props) {
             return;
         }
 
-        router.post(
-            `/import/${batch.id}/sync`,
-            { device_id: Number(deviceId) },
-            { preserveScroll: true, preserveState: true },
-        );
+        router.post(`/import/${batch.id}/sync`, { device_id: Number(deviceId) }, { preserveScroll: true, preserveState: true });
+    };
+
+    const set = <K extends keyof UserForm>(key: K, value: UserForm[K]) =>
+        setForm((current) => ({ ...current, [key]: value }));
+
+    const openAddUser = () => {
+        setEditingUser(null);
+        setForm(EMPTY_USER);
+        setFormErrors({});
+        setUserDialogOpen(true);
+    };
+
+    const openEditUser = (user: ImportedUserRow) => {
+        setEditingUser(user);
+        setForm({
+            user_id: user.user_id,
+            name: user.name,
+            password: user.password ?? '',
+            card_number: user.card_number ?? '',
+            privilege: user.privilege || 'user',
+        });
+        setFormErrors({});
+        setUserDialogOpen(true);
+    };
+
+    const submitUser = (event: FormEvent) => {
+        event.preventDefault();
+
+        const options = {
+            preserveScroll: true,
+            onStart: () => setSaving(true),
+            onFinish: () => setSaving(false),
+            onError: (errors: Record<string, string>) => setFormErrors(errors),
+            onSuccess: () => setUserDialogOpen(false),
+        };
+
+        if (editingUser) {
+            router.put(`/import/${batch.id}/users/${editingUser.id}`, form, options);
+        } else {
+            router.post(`/import/${batch.id}/users`, form, options);
+        }
+    };
+
+    const deleteUser = (user: ImportedUserRow) => {
+        if (!window.confirm(`Remove ${user.name || 'this row'} from the import?`)) {
+            return;
+        }
+
+        router.delete(`/import/${batch.id}/users/${user.id}`, { preserveScroll: true });
     };
 
     const rowStatus = (user: ImportedUserRow) => (!user.is_valid ? 'skipped' : user.sync_status);
@@ -132,23 +196,27 @@ export default function ImportShow({ batch, users, devices }: Props) {
                     </Button>
                 </div>
 
-                {(isSyncing || batch.status === 'completed' || batch.status === 'failed') && (
-                    <div className="mt-5">
-                        <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-                            <span>
-                                {processed} of {batch.valid_rows} processed
-                            </span>
-                            <span>{percent}%</span>
-                        </div>
-                        <Progress
-                            value={percent}
-                            indicatorClassName={batch.failed_count > 0 && !isSyncing ? 'bg-amber-500' : undefined}
+                {showFlow && (
+                    <div className="mt-6 border-t pt-6">
+                        <SyncFlow
+                            status={batch.status}
+                            total={batch.valid_rows}
+                            synced={batch.synced_count}
+                            failed={batch.failed_count}
+                            deviceName={deviceName}
                         />
                     </div>
                 )}
             </Card>
 
-            <Card className="mt-6 overflow-hidden">
+            <div className="mb-3 mt-6 flex items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">Review and edit rows before syncing.</p>
+                <Button variant="outline" size="sm" onClick={openAddUser} disabled={isSyncing}>
+                    <Plus className="size-4" /> Add user
+                </Button>
+            </div>
+
+            <Card className="overflow-hidden">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -160,6 +228,7 @@ export default function ImportShow({ batch, users, devices }: Props) {
                             <TableHead>Card</TableHead>
                             <TableHead>Role</TableHead>
                             <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Edit</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -192,6 +261,28 @@ export default function ImportShow({ batch, users, devices }: Props) {
                                         )}
                                     </div>
                                 </TableCell>
+                                <TableCell>
+                                    <div className="flex justify-end gap-1">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="size-8"
+                                            onClick={() => openEditUser(user)}
+                                            disabled={isSyncing}
+                                        >
+                                            <Pencil className="size-4" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="size-8 text-muted-foreground hover:text-destructive"
+                                            onClick={() => deleteUser(user)}
+                                            disabled={isSyncing}
+                                        >
+                                            <Trash2 className="size-4" />
+                                        </Button>
+                                    </div>
+                                </TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
@@ -222,6 +313,90 @@ export default function ImportShow({ batch, users, devices }: Props) {
                     </div>
                 )}
             </Card>
+
+            <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>{editingUser ? 'Edit user' : 'Add user'}</DialogTitle>
+                    </DialogHeader>
+
+                    <form className="space-y-4" onSubmit={submitUser}>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="user_id">User ID</Label>
+                                <Input
+                                    id="user_id"
+                                    value={form.user_id}
+                                    placeholder="e.g. 1001"
+                                    className="font-mono"
+                                    onChange={(event) => set('user_id', event.target.value)}
+                                />
+                                {formErrors.user_id && <p className="text-xs text-destructive">{formErrors.user_id}</p>}
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="privilege">Role</Label>
+                                <Select value={form.privilege} onValueChange={(value) => set('privilege', value)}>
+                                    <SelectTrigger id="privilege">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="user">User</SelectItem>
+                                        <SelectItem value="admin">Admin</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label htmlFor="name">Name</Label>
+                            <Input
+                                id="name"
+                                value={form.name}
+                                placeholder="Dana Cohen"
+                                onChange={(event) => set('name', event.target.value)}
+                            />
+                            {formErrors.name && <p className="text-xs text-destructive">{formErrors.name}</p>}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="password">PIN <span className="text-muted-foreground">(optional)</span></Label>
+                                <Input
+                                    id="password"
+                                    value={form.password}
+                                    placeholder="≤ 8 digits"
+                                    className="font-mono"
+                                    onChange={(event) => set('password', event.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="card_number">Card <span className="text-muted-foreground">(optional)</span></Label>
+                                <Input
+                                    id="card_number"
+                                    value={form.card_number}
+                                    placeholder="≤ 10 digits"
+                                    className="font-mono"
+                                    onChange={(event) => set('card_number', event.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <p className="text-xs text-muted-foreground">
+                            Device limits: user id ≤ 9 digits, name ≤ 24 chars (auto-converted), PIN ≤ 8 digits. Rows that
+                            break a rule are saved but flagged invalid until fixed.
+                        </p>
+
+                        <DialogFooter>
+                            <Button type="button" variant="ghost" onClick={() => setUserDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={saving}>
+                                {saving ? 'Saving…' : 'Save user'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

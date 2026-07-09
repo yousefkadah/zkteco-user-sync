@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Import;
 
-use App\Support\NameTransliterator;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use RuntimeException;
 
@@ -27,6 +26,8 @@ class UserSpreadsheetParser
         'card_number' => ['card', 'card number', 'card no', 'rfid', 'badge', 'כרטיס', 'מספר כרטיס'],
         'privilege' => ['privilege', 'role', 'level', 'access level', 'admin', 'type', 'הרשאה', 'תפקיד', 'רמה'],
     ];
+
+    public function __construct(private ImportedUserValidator $validator = new ImportedUserValidator) {}
 
     /**
      * @return list<ParsedUserRow>
@@ -105,60 +106,24 @@ class UserSpreadsheetParser
      */
     private function buildRow(int $rowNumber, array $row, array $map): ParsedUserRow
     {
-        $userId = $this->cell($row, $map, 'user_id');
-        $name = $this->cell($row, $map, 'name');
-        $password = $this->cell($row, $map, 'password');
-        $cardNumber = $this->cell($row, $map, 'card_number');
-        $privilege = $this->normalisePrivilege($this->cell($row, $map, 'privilege'));
-
-        $nameAscii = NameTransliterator::toAscii($name);
-
-        $parsed = new ParsedUserRow(
-            rowNumber: $rowNumber,
-            userId: $userId,
-            name: $name,
-            nameAscii: $nameAscii,
-            password: $password !== '' ? $password : null,
-            cardNumber: $cardNumber !== '' ? $cardNumber : null,
-            privilege: $privilege,
+        $result = $this->validator->validate(
+            $this->cell($row, $map, 'user_id'),
+            $this->cell($row, $map, 'name'),
+            $this->cell($row, $map, 'password'),
+            $this->cell($row, $map, 'card_number'),
+            $this->cell($row, $map, 'privilege'),
         );
 
-        $this->validate($parsed);
-
-        return $parsed;
-    }
-
-    private function validate(ParsedUserRow $row): void
-    {
-        if ($row->userId === '') {
-            $row->addError('Missing user id.');
-        } elseif (! ctype_digit($row->userId)) {
-            $row->addError('User id must contain digits only.');
-        } elseif (strlen($row->userId) > 9) {
-            $row->addError('User id must be 9 digits or fewer.');
-        }
-
-        if (trim($row->name) === '') {
-            $row->addError('Missing name.');
-        } elseif ($row->nameAscii === '') {
-            $row->addError('Name could not be converted to the device character set.');
-        }
-
-        if ($row->password !== null) {
-            if (! ctype_digit($row->password)) {
-                $row->addError('Password/PIN must contain digits only.');
-            } elseif (strlen($row->password) > 8) {
-                $row->addError('Password/PIN must be 8 digits or fewer.');
-            }
-        }
-
-        if ($row->cardNumber !== null) {
-            if (! ctype_digit($row->cardNumber)) {
-                $row->addError('Card number must contain digits only.');
-            } elseif (strlen($row->cardNumber) > 10) {
-                $row->addError('Card number must be 10 digits or fewer.');
-            }
-        }
+        return new ParsedUserRow(
+            rowNumber: $rowNumber,
+            userId: $result['user_id'],
+            name: $result['name'],
+            nameAscii: $result['name_ascii'],
+            password: $result['password'],
+            cardNumber: $result['card_number'],
+            privilege: $result['privilege'],
+            errors: $result['errors'],
+        );
     }
 
     /**
@@ -204,15 +169,6 @@ class UserSpreadsheetParser
         }
 
         return trim((string) $value);
-    }
-
-    private function normalisePrivilege(string $value): string
-    {
-        $value = mb_strtolower(trim($value));
-
-        return in_array($value, ['admin', 'administrator', 'manager', 'super', 'super admin', '14', '1', 'yes', 'true', 'מנהל'], true)
-            ? 'admin'
-            : 'user';
     }
 
     private function normaliseHeader(string $label): string
