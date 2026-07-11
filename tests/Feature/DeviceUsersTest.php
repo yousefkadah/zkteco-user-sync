@@ -66,6 +66,24 @@ class DeviceUsersTest extends TestCase
         $this->assertFalse($device->fresh()->last_connection_ok);
     }
 
+    public function test_it_sanitises_raw_socket_errors_from_an_offline_device(): void
+    {
+        $device = Device::create(['name' => 'D', 'ip_address' => '192.168.1.69', 'port' => 4370]);
+
+        $fake = new FakeZkteco;
+        // A real unreachable device throws a raw socket error rather than returning false.
+        $fake->throwMessage = 'socket_sendto(): Unable to write to socket [65]: No route to host';
+
+        $result = $this->bindFake($fake)->listUsers($device);
+
+        $this->assertFalse($result['ok']);
+        // The scary raw socket error must never reach the user.
+        $this->assertStringNotContainsStringIgnoringCase('socket_sendto', $result['error']);
+        $this->assertStringNotContainsStringIgnoringCase('No route to host', $result['error']);
+        $this->assertStringContainsStringIgnoringCase('could not reach the device', $result['error']);
+        $this->assertFalse($device->fresh()->last_connection_ok);
+    }
+
     public function test_the_users_page_renders_with_device_users(): void
     {
         $device = Device::create(['name' => 'Front Door', 'ip_address' => '192.168.1.201', 'port' => 4370]);

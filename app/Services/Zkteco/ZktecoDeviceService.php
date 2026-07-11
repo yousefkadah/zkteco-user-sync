@@ -46,7 +46,7 @@ class ZktecoDeviceService
                 'users' => $users,
             ];
         } catch (Throwable $e) {
-            return ['ok' => false, 'error' => $e->getMessage()];
+            return ['ok' => false, 'error' => $this->describeError($e)];
         } finally {
             $this->safe(fn () => $zk->disconnect());
         }
@@ -72,7 +72,7 @@ class ZktecoDeviceService
 
             return ['ok' => true, 'users' => $users, 'count' => count($users)];
         } catch (Throwable $e) {
-            return ['ok' => false, 'error' => $e->getMessage(), 'users' => [], 'count' => 0];
+            return ['ok' => false, 'error' => $this->describeError($e), 'users' => [], 'count' => 0];
         } finally {
             $this->safe(fn () => $zk->disconnect());
             $device->update(['last_connected_at' => now(), 'last_connection_ok' => $ok]);
@@ -148,7 +148,7 @@ class ZktecoDeviceService
 
             return ['ok' => true];
         } catch (Throwable $e) {
-            return ['ok' => false, 'error' => $e->getMessage()];
+            return ['ok' => false, 'error' => $this->describeError($e)];
         } finally {
             $this->safe(fn () => $zk->enableDevice());
             $this->safe(fn () => $zk->disconnect());
@@ -177,7 +177,7 @@ class ZktecoDeviceService
 
             return ['ok' => true];
         } catch (Throwable $e) {
-            return ['ok' => false, 'error' => $e->getMessage()];
+            return ['ok' => false, 'error' => $this->describeError($e)];
         } finally {
             $this->safe(fn () => $zk->enableDevice());
             $this->safe(fn () => $zk->disconnect());
@@ -206,7 +206,7 @@ class ZktecoDeviceService
 
             return ['ok' => true];
         } catch (Throwable $e) {
-            return ['ok' => false, 'error' => $e->getMessage()];
+            return ['ok' => false, 'error' => $this->describeError($e)];
         } finally {
             $this->safe(fn () => $zk->enableDevice());
             $this->safe(fn () => $zk->disconnect());
@@ -244,7 +244,7 @@ class ZktecoDeviceService
             try {
                 $existing = $zk->getUsers();
             } catch (Throwable $e) {
-                $users->each(fn (ImportedUser $user) => $this->markFailed($user, 'Could not read the device user list: '.$e->getMessage()));
+                $users->each(fn (ImportedUser $user) => $this->markFailed($user, 'Could not read the device user list: '.$this->describeError($e)));
                 $this->finish($batch, $device, 0, $users->count(), ImportBatch::STATUS_FAILED);
 
                 return;
@@ -277,7 +277,7 @@ class ZktecoDeviceService
                     ]);
                     $synced++;
                 } catch (Throwable $e) {
-                    $this->markFailed($user, $e->getMessage(), $uid);
+                    $this->markFailed($user, $this->describeError($e), $uid);
                     $failed++;
                 }
 
@@ -384,5 +384,24 @@ class ZktecoDeviceService
         } catch (Throwable) {
             // Cleanup calls must never mask the real outcome.
         }
+    }
+
+    /**
+     * Turn a low-level device/socket exception into a friendly, actionable message.
+     * The ZKTeco socket layer throws raw errors (e.g. "socket_sendto(): Unable to
+     * write to socket [65]: No route to host") that should never reach the user.
+     */
+    private function describeError(Throwable $e): string
+    {
+        $message = trim($e->getMessage());
+        $lower = strtolower($message);
+
+        foreach (['socket', 'route to host', 'unreachable', 'timed out', 'timeout', 'refused', 'stream_socket', 'fwrite', 'fread', 'network is', 'errno'] as $needle) {
+            if (str_contains($lower, $needle)) {
+                return 'Could not reach the device. Make sure it is powered on and connected to the same network as this computer.';
+            }
+        }
+
+        return $message !== '' ? $message : 'Something went wrong communicating with the device.';
     }
 }

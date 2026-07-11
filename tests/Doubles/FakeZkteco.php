@@ -15,6 +15,9 @@ class FakeZkteco extends ZKTeco
 {
     public bool $connectResult = true;
 
+    /** When set, connect() throws with this message (simulates a raw socket error). */
+    public ?string $throwMessage = null;
+
     /** @var array<int, array<string, mixed>> */
     public array $existingUsers = [];
 
@@ -38,6 +41,10 @@ class FakeZkteco extends ZKTeco
 
     public function connect(): bool
     {
+        if ($this->throwMessage !== null) {
+            throw new \RuntimeException($this->throwMessage);
+        }
+
         return $this->connectResult;
     }
 

@@ -17,4 +17,11 @@
   <circle cx="120" cy="200" r="17" fill="#ffffff" opacity="0.78"/>
   <circle cx="176" cy="200" r="22" fill="#ffffff"/>
   <path d="M206 200 l26 -18 v36 z" fill="#ffffff"/>
+  <!-- Fullness maker seal -->
+  <circle cx="326" cy="330" r="43" fill="#1d4ed8"/>
+  <circle cx="326" cy="330" r="39" fill="#ffffff"/>
+  <g transform="translate(297 309) scale(1.35)">
+    <path d="M42.84,5.76L40.03,0l-23.3,21.24c-0.83,0.71-0.93,1.96-0.22,2.79s1.96,0.93,2.79,0.22l1.74-1.49l2.84,2.33L42.84,5.76z" fill="#00B8E4"/>
+    <path d="M17.88,20.19L2.67,7.67L0,13.17l18.2,17.67l5.69-5.76l-2.85-2.32l-1.74,1.49c-0.83,0.71-2.08,0.61-2.79-0.22c-0.71-0.83-0.61-2.08,0.22-2.79L17.88,20.19z" fill="#61FFF8"/>
+  </g>
 </svg>
