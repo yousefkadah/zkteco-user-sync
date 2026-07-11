@@ -50,6 +50,9 @@ jobs:
         run: |
           cp .env.example .env
           php artisan key:generate --no-interaction
+          # Store apps update through the Microsoft Store, not electron-updater —
+          # disable self-update in the MSIX build (and keep it out of the package).
+          sed -i 's/^NATIVEPHP_UPDATER_ENABLED=true/NATIVEPHP_UPDATER_ENABLED=false/' .env
 
       - name: Setup Node
         uses: actions/setup-node@v4
