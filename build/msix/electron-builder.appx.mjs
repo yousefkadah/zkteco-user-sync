@@ -93,10 +93,18 @@ export default {
         createDesktopShortcut: 'always',
         deleteAppDataOnUninstall: deleteAppDataOnUninstall,
     },
-    protocols: {
-        name: deepLinkProtocol,
-        schemes: [deepLinkProtocol],
-    },
+    // Only register a URL-protocol handler when a deep-link scheme is configured.
+    // An empty <uap:Protocol Name=""> makes MakeAppx reject the MSIX manifest
+    // (0x80080204 "the package manifest is not valid"); NSIS/dmg tolerate it, but
+    // the Store build must omit it entirely when unused.
+    ...(deepLinkProtocol
+        ? {
+            protocols: {
+                name: deepLinkProtocol,
+                schemes: [deepLinkProtocol],
+            },
+        }
+        : {}),
     mac: {
         entitlementsInherit: 'build/entitlements.mac.plist',
         artifactName: appName + '-${version}-${arch}.${ext}',
