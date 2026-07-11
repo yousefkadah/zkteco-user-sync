@@ -39,6 +39,11 @@ jobs:
       NODE_OPTIONS: --max-old-space-size=8192
       # Build unsigned; add signing secrets later for release builds.
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # electron-updater: emit the latest*.yml update metadata + bake app-update.yml
+      # into the package so the app self-updates from GitHub Releases (owner/repo come
+      # from the bundled .env via .env.example).
+      NATIVEPHP_UPDATER_ENABLED: 'true'
+      NATIVEPHP_UPDATER_PROVIDER: github
     steps:
       - uses: actions/checkout@v4
 
@@ -78,40 +83,64 @@ jobs:
       - name: Build ${{ matrix.target }} (${{ matrix.arch }})
         run: php artisan native:build ${{ matrix.target }} ${{ matrix.arch }} --no-interaction
 
-      # Copy each installer to a STABLE, unversioned name so the public download
-      # page (Fullness) can link to /releases/latest/download/<name> reliably.
-      - name: Collect installers
+      # Stage two things:
+      #  (a) STABLE-named copies for the Fullness download page's /latest/download links.
+      #  (b) electron-builder's ORIGINAL installers + latest*.yml for the self-updater
+      #      (electron-updater matches the exact filename inside latest*.yml, so the
+      #      original must be present too). Windows + Linux self-update unsigned; mac
+      #      is dmg-only (no latest-mac.yml) so the unsigned mac updater is a no-op.
+      - name: Stage release files
         shell: bash
         run: |
-          mkdir -p artifact
-          # Pick the REAL installer (>40MB), skipping helper stubs like NSIS elevate.exe (~9KB).
-          big() { find . -name "$1" -not -path '*/node_modules/*' -size +40M 2>/dev/null | head -1; }
+          set -e
+          mkdir -p upload
+          cd nativephp/electron/dist
+          # The updater matches the exact filename inside latest*.yml, but electron-builder
+          # writes files to disk with spaces while the yml references hyphenated names — so
+          # derive the target name straight from the yml's `path:` field (bulletproof).
+          yml_path() { grep -E '^path:' "$1" 2>/dev/null | head -1 | sed -E "s/^path:[[:space:]]*//; s/^['\"]//; s/['\"]$//"; }
           case "${{ matrix.target }}" in
-            mac)
-              f=$(big '*.dmg'); [ -n "$f" ] && cp "$f" "artifact/ZKTeco-User-Sync-mac-arm64.dmg" ;;
             win)
-              # Prefer the named NSIS installer ("... Setup ....exe"); fall back to the largest .exe.
-              f=$(find . -iname '*setup*.exe' -not -path '*/node_modules/*' 2>/dev/null | head -1)
-              [ -z "$f" ] && f=$(big '*.exe')
-              [ -n "$f" ] && cp "$f" "artifact/ZKTeco-User-Sync-win-x64.exe" ;;
+              disk=$(find . -maxdepth 1 -name '*.exe' -size +40M | head -1)
+              cp "$disk" "../../../upload/ZKTeco-User-Sync-win-x64.exe"          # stable name for the Fullness page
+              name=$(yml_path latest.yml)
+              if [ -n "$name" ]; then
+                cp "$disk" "../../../upload/$name"                               # exact name latest.yml references
+                [ -f "$disk.blockmap" ] && cp "$disk.blockmap" "../../../upload/$name.blockmap"
+                cp latest.yml ../../../upload/
+              fi
+              ;;
             linux)
-              a=$(big '*.AppImage'); [ -n "$a" ] && cp "$a" "artifact/ZKTeco-User-Sync-linux-x86_64.AppImage"
-              d=$(big '*.deb');      [ -n "$d" ] && cp "$d" "artifact/ZKTeco-User-Sync-linux-amd64.deb" ;;
+              disk=$(find . -maxdepth 1 -name '*.AppImage' -size +40M | head -1)
+              cp "$disk" "../../../upload/ZKTeco-User-Sync-linux-x86_64.AppImage"
+              deb=$(find . -maxdepth 1 -name '*.deb' | head -1)
+              [ -n "$deb" ] && cp "$deb" "../../../upload/ZKTeco-User-Sync-linux-amd64.deb"
+              name=$(yml_path latest-linux.yml)
+              if [ -n "$name" ]; then
+                cp "$disk" "../../../upload/$name"
+                cp latest-linux.yml ../../../upload/
+              fi
+              ;;
+            mac)
+              # Unsigned mac can't self-update (Squirrel) — ship the arm64 dmg only, no yml.
+              disk=$(find . -maxdepth 1 -name '*arm64.dmg' -size +40M | head -1)
+              cp "$disk" "../../../upload/ZKTeco-User-Sync-mac-arm64.dmg"
+              ;;
           esac
-          echo "collected:"; ls -la artifact
-          if [ -z "$(ls -A artifact 2>/dev/null)" ]; then echo 'No installer produced'; exit 1; fi
+          echo "staged:"; ls -la ../../../upload
+          [ -n "$(ls -A ../../../upload 2>/dev/null)" ] || { echo 'No release files staged'; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: artifact/*
+          path: upload/*
           if-no-files-found: error
 
-      # On a v* tag, publish the stably-named installers to the release so the
-      # Fullness download page's /releases/latest/download/<name> links resolve.
+      # On a v* tag, publish the installers + latest*.yml to the release. The Fullness
+      # download page resolves the (versioned) installer URLs from the GitHub API.
       - name: Publish to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: artifact/*
+          files: upload/*
           fail_on_unmatched_files: true

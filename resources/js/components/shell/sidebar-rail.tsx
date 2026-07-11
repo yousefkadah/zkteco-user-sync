@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 
 import { cn } from '@/lib/utils';
+import { AboutFullness } from '@/components/shell/about-fullness';
 import type { NavItem } from '@/components/shell/nav';
 
 /** The primary navigation rail — dense, with a leading active-accent bar (RTL-aware). */
@@ -33,6 +34,8 @@ export function SidebarRail({ nav }: { nav: NavItem[] }) {
                     </Link>
                 );
             })}
+
+            <AboutFullness />
         </nav>
     );
 }

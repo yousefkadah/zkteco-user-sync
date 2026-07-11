@@ -7,6 +7,7 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\SyncController;
 use App\Http\Controllers\TemplateController;
 use Illuminate\Support\Facades\Route;
+use Native\Desktop\Facades\AutoUpdater;
 
 Route::get('/', [ImportController::class, 'index'])->name('import.index');
 Route::post('/import', [ImportController::class, 'store'])->name('import.store');
@@ -30,3 +31,16 @@ Route::delete('/devices/{device}/users/{uid}', [DeviceController::class, 'destro
 Route::delete('/devices/{device}/users', [DeviceController::class, 'clearDeviceUsers'])->name('devices.users.clear');
 
 Route::get('/template', [TemplateController::class, 'download'])->name('template.download');
+
+// Manual "Check for updates" — the app already auto-checks GitHub on launch; this
+// lets the About dialog trigger a check on demand. Wrapped so it no-ops outside the
+// native runtime (e.g. plain `artisan serve`).
+Route::post('/updates/check', function () {
+    try {
+        AutoUpdater::checkForUpdates();
+    } catch (Throwable) {
+        // AutoUpdater is only bound inside the packaged NativePHP app.
+    }
+
+    return back();
+})->name('updates.check');
