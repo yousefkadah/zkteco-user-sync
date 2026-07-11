@@ -1,13 +1,53 @@
-# ZKTeco User Sync
+<div align="center">
+  <img src="docs/logo.png" alt="ZKTeco User Sync" width="112" height="112" />
 
-A small desktop app that provisions **ZKTeco** attendance / access terminals from
-an Excel file. Upload a spreadsheet of users, review the parsed list (with
-validation), pick a device, and push every user — **with their PIN/password** —
-straight onto the terminal over the local network.
+  <h1>ZKTeco User Sync</h1>
+
+  <p><b>Bulk-provision your ZKTeco attendance &amp; access terminals from an Excel file.</b></p>
+
+  <p>Upload a spreadsheet of employees, review and edit the rows, then push every user — with their
+  PIN, card and privilege — straight onto the terminal over your local network. No cloud; everything
+  stays on your machine.</p>
+
+  <p><b><a href="https://github.com/yousefkadah/zkteco-user-sync/releases/latest">⬇&nbsp; Download for macOS · Windows · Linux</a></b></p>
+
+  <sub>A <b>Fullness</b> product · <a href="https://fullness.co.il">fullness.co.il</a></sub>
+</div>
+
+---
+
+## Screenshots
+
+|  |  |
+| :---: | :---: |
+| **Home** | **Imports** |
+| ![Home](docs/screenshots/home.png) | ![Imports](docs/screenshots/imports.png) |
+| **Devices** | **Review &amp; sync** |
+| ![Devices](docs/screenshots/devices.png) | ![Review and sync](docs/screenshots/import-detail.png) |
+
+---
+
+## Download &amp; install
+
+Grab the latest installer for your OS from the **[Releases page](https://github.com/yousefkadah/zkteco-user-sync/releases/latest)**:
+
+| macOS | Windows | Linux |
+| :---: | :---: | :---: |
+| `.dmg` (Apple Silicon) | `.exe` installer | `.AppImage` or `.deb` |
+
+The app **updates itself** — it checks GitHub for a newer release on launch and installs it (Windows &amp; Linux; macOS updates by re-downloading).
+
+> **First launch — the app isn't code-signed yet.** Because there's no paid signing certificate,
+> your OS/browser shows a one-time "unverified"/"unknown publisher" warning. It is safe:
+> - **macOS:** System Settings → Privacy &amp; Security → **Open Anyway**.
+> - **Windows (SmartScreen):** **More info → Run anyway**.
+> - **Chrome download flagged as dangerous:** open the downloads bar → the file's **⋮** menu → **Keep**.
+
+---
 
 Built with [NativePHP for Desktop](https://nativephp.com) (Laravel + React/Inertia
 + [shadcn/ui](https://ui.shadcn.com) wrapped in Electron), so it ships as a native
-Windows app while staying a normal Laravel codebase underneath.
+desktop app while staying a normal Laravel codebase underneath.
 
 ---
 
@@ -16,7 +56,8 @@ Windows app while staying a normal Laravel codebase underneath.
 1. **Devices** – **scan the local network to auto-discover terminals** (a
    non-blocking UDP sweep of your subnet on port 4370), or add one manually
    (name, IP, port `4370`, optional communication key). "Test connection" reads
-   the serial, firmware and current user count.
+   the serial, firmware and current user count. Open a device to **view, add,
+   edit or remove the users stored on the terminal** directly — no import needed.
 2. **Import** – drop in an `.xlsx`, `.xls` or `.csv`. Every row is validated
    against the device's field limits before anything is written.
 3. **Sync** – push the valid rows to the selected device with a live progress
@@ -61,7 +102,7 @@ device stores names in a 24‑byte ASCII field.
 
 ## Development
 
-Requirements: PHP 8.3+ (developed on 8.5), Composer, Node 20+.
+Requirements: PHP 8.4+ (developed on 8.5), Composer, Node 20+.
 
 ```bash
 composer install
