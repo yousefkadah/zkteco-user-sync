@@ -188,7 +188,7 @@ export default function ImportShow({ batch, users, devices }: Props) {
 
             <Toolbar>
                 <div className="flex min-w-0 items-center gap-1.5 text-[13px]">
-                    <Link href="/" className="text-muted-foreground hover:text-foreground">
+                    <Link href="/import" className="text-muted-foreground hover:text-foreground">
                         Imports
                     </Link>
                     <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />

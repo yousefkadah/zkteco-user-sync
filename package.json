@@ -1,7 +1,7 @@
 {
     "$schema": "https://www.schemastore.org/package.json",
     "name": "zkteco-user-sync",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "Bulk-provision ZKTeco attendance/access devices from an Excel file",
     "author": "Yousef Kadah (https://github.com/yousefkadah)",
     "homepage": "https://github.com/yousefkadah/zkteco-user-sync",

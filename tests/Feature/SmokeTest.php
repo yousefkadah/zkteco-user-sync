@@ -12,9 +12,16 @@ class SmokeTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_imports_page_renders(): void
+    public function test_home_page_renders(): void
     {
         $this->get('/')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->component('Home/Index'));
+    }
+
+    public function test_imports_page_renders(): void
+    {
+        $this->get('/import')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page->component('Import/Index'));
     }

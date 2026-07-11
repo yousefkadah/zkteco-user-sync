@@ -84,6 +84,70 @@ class DeviceUsersTest extends TestCase
         $this->assertFalse($device->fresh()->last_connection_ok);
     }
 
+    public function test_it_adds_a_user_to_the_next_free_slot(): void
+    {
+        $device = Device::create(['name' => 'D', 'ip_address' => '192.168.1.201', 'port' => 4370]);
+
+        $fake = new FakeZkteco;
+        $fake->existingUsers = [
+            ['uid' => 1, 'user_id' => '1001', 'name' => 'Alice', 'role' => 0, 'password' => '', 'card_no' => ''],
+        ];
+
+        $result = $this->bindFake($fake)->createDeviceUser($device, [
+            'user_id' => '2002',
+            'name_ascii' => 'Bob',
+            'password' => '1234',
+            'card_number' => null,
+            'privilege' => 'user',
+        ]);
+
+        $this->assertTrue($result['ok']);
+        // Slot 1 was taken → the new user lands in the next free slot (2).
+        $this->assertSame(2, $fake->pushed[0]['uid']);
+        $this->assertSame('2002', (string) $fake->pushed[0]['userid']);
+        $this->assertSame('Bob', $fake->pushed[0]['name']);
+    }
+
+    public function test_it_rejects_a_duplicate_user_id_when_adding(): void
+    {
+        $device = Device::create(['name' => 'D', 'ip_address' => '192.168.1.201', 'port' => 4370]);
+
+        $fake = new FakeZkteco;
+        $fake->existingUsers = [
+            ['uid' => 1, 'user_id' => '1001', 'name' => 'Alice', 'role' => 0, 'password' => '', 'card_no' => ''],
+        ];
+
+        $result = $this->bindFake($fake)->createDeviceUser($device, [
+            'user_id' => '1001',
+            'name_ascii' => 'Duplicate',
+            'password' => null,
+            'card_number' => null,
+            'privilege' => 'user',
+        ]);
+
+        $this->assertFalse($result['ok']);
+        $this->assertStringContainsStringIgnoringCase('already exists', $result['error']);
+        $this->assertEmpty($fake->pushed);
+    }
+
+    public function test_the_add_user_route_writes_to_the_device(): void
+    {
+        $device = Device::create(['name' => 'Front Door', 'ip_address' => '192.168.1.201', 'port' => 4370]);
+
+        $fake = new FakeZkteco;
+        $this->app->instance(ZktecoConnectionFactory::class, new FakeZktecoConnectionFactory($fake));
+
+        $this->post("/devices/{$device->id}/users", [
+            'user_id' => '3003',
+            'name' => 'Carol',
+            'password' => '',
+            'card_number' => '',
+            'privilege' => 'user',
+        ])->assertRedirect();
+
+        $this->assertSame('3003', (string) $fake->pushed[0]['userid']);
+    }
+
     public function test_the_users_page_renders_with_device_users(): void
     {
         $device = Device::create(['name' => 'Front Door', 'ip_address' => '192.168.1.201', 'port' => 4370]);

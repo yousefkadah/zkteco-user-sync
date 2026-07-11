@@ -35,6 +35,17 @@ createInertiaApp({
         }
 
         createRoot(el).render(<App {...props} />);
+
+        // Fade out the boot splash once React has painted.
+        requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+                const splash = document.getElementById('app-splash');
+                if (splash) {
+                    splash.style.opacity = '0';
+                    window.setTimeout(() => splash.remove(), 400);
+                }
+            }),
+        );
     },
     // No web-style top progress bar inside a fixed window — load feedback lives in the status bar.
     progress: false,

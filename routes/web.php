@@ -7,9 +7,11 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\SyncController;
 use App\Http\Controllers\TemplateController;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 use Native\Desktop\Facades\AutoUpdater;
 
-Route::get('/', [ImportController::class, 'index'])->name('import.index');
+Route::get('/', fn () => Inertia::render('Home/Index'))->name('home');
+Route::get('/import', [ImportController::class, 'index'])->name('import.index');
 Route::post('/import', [ImportController::class, 'store'])->name('import.store');
 Route::get('/import/{batch}', [ImportController::class, 'show'])->name('import.show');
 Route::get('/import/{batch}/transfer', [ImportController::class, 'transfer'])->name('import.transfer');
@@ -26,6 +28,7 @@ Route::put('/devices/{device}', [DeviceController::class, 'update'])->name('devi
 Route::delete('/devices/{device}', [DeviceController::class, 'destroy'])->name('devices.destroy');
 Route::post('/devices/{device}/test', [DeviceController::class, 'test'])->name('devices.test');
 Route::get('/devices/{device}/users', [DeviceController::class, 'users'])->name('devices.users');
+Route::post('/devices/{device}/users', [DeviceController::class, 'storeDeviceUser'])->name('devices.users.store');
 Route::put('/devices/{device}/users/{uid}', [DeviceController::class, 'updateDeviceUser'])->name('devices.users.update');
 Route::delete('/devices/{device}/users/{uid}', [DeviceController::class, 'destroyDeviceUser'])->name('devices.users.destroy');
 Route::delete('/devices/{device}/users', [DeviceController::class, 'clearDeviceUsers'])->name('devices.users.clear');

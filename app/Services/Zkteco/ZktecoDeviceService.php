@@ -157,6 +157,62 @@ class ZktecoDeviceService
     }
 
     /**
+     * Add a new user to the device at the next free slot, rejecting a duplicate user id.
+     *
+     * @param  array{user_id: string, name_ascii: string, password: ?string, card_number: ?string, privilege: string}  $data
+     * @return array{ok: bool, error?: string}
+     */
+    public function createDeviceUser(Device $device, array $data): array
+    {
+        $zk = $this->factory->make($device);
+        $connected = false;
+
+        try {
+            if (! $zk->connect()) {
+                return ['ok' => false, 'error' => 'Could not connect to the device.'];
+            }
+
+            $connected = true;
+
+            [$usedUids, $userIdToUid] = $this->indexExistingUsers($zk->getUsers());
+
+            if (isset($userIdToUid[$data['user_id']])) {
+                return ['ok' => false, 'error' => 'A user with ID '.$data['user_id'].' already exists on this device.'];
+            }
+
+            $uid = 1;
+            while (isset($usedUids[$uid])) {
+                $uid++;
+            }
+
+            $zk->disableDevice();
+
+            $role = $data['privilege'] === ImportedUser::PRIVILEGE_ADMIN ? Util::LEVEL_ADMIN : Util::LEVEL_USER;
+
+            $result = $zk->setUser(
+                $uid,
+                $data['user_id'],
+                $data['name_ascii'],
+                (string) ($data['password'] ?? ''),
+                $role,
+                (int) ($data['card_number'] ?? 0),
+            );
+
+            if ($result === false) {
+                return ['ok' => false, 'error' => 'The device did not acknowledge the new user.'];
+            }
+
+            return ['ok' => true];
+        } catch (Throwable $e) {
+            return ['ok' => false, 'error' => $this->describeError($e)];
+        } finally {
+            $this->safe(fn () => $zk->enableDevice());
+            $this->safe(fn () => $zk->disconnect());
+            $device->update(['last_connected_at' => now(), 'last_connection_ok' => $connected]);
+        }
+    }
+
+    /**
      * Remove a single user (by device slot uid) from the device.
      *
      * @return array{ok: bool, error?: string}

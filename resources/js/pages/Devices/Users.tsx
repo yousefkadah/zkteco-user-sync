@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { ChevronRight, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { ChevronRight, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -87,6 +87,13 @@ export default function DevicesUsers({ device, result }: Props) {
         router.reload({ onStart: () => setRefreshing(true), onFinish: () => setRefreshing(false) });
     };
 
+    const openAdd = () => {
+        setEditingUid(null);
+        setForm({ user_id: '', name: '', password: '', card_number: '', privilege: 'user' });
+        setFormErrors({});
+        setEditOpen(true);
+    };
+
     const openEdit = (user: DeviceUser) => {
         setEditingUid(user.uid);
         setForm({
@@ -103,7 +110,7 @@ export default function DevicesUsers({ device, result }: Props) {
     const submitEdit = (event: FormEvent) => {
         event.preventDefault();
 
-        router.put(`/devices/${device.id}/users/${editingUid}`, form, {
+        const options = {
             preserveScroll: true,
             onStart: () => {
                 setSaving(true);
@@ -113,9 +120,16 @@ export default function DevicesUsers({ device, result }: Props) {
                 setSaving(false);
                 setBusy(false);
             },
-            onError: (errors) => setFormErrors(errors),
+            onError: (errors: Record<string, string>) => setFormErrors(errors),
             onSuccess: () => setEditOpen(false),
-        });
+        };
+
+        // editingUid === null → add a new user to the next free slot; otherwise overwrite the slot.
+        if (editingUid === null) {
+            router.post(`/devices/${device.id}/users`, form, options);
+        } else {
+            router.put(`/devices/${device.id}/users/${editingUid}`, form, options);
+        }
     };
 
     const remove = (user: DeviceUser) => {
@@ -174,6 +188,11 @@ export default function DevicesUsers({ device, result }: Props) {
                         <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
                         {refreshing ? 'Reading…' : 'Refresh'}
                     </Button>
+                    {result.ok && (
+                        <Button size="sm" onClick={openAdd} disabled={busy}>
+                            <Plus className="size-4" /> Add user
+                        </Button>
+                    )}
                 </div>
             </Toolbar>
 
@@ -249,7 +268,7 @@ export default function DevicesUsers({ device, result }: Props) {
             <Dialog open={editOpen} onOpenChange={setEditOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Edit user on device</DialogTitle>
+                        <DialogTitle>{editingUid === null ? 'Add user to device' : 'Edit user on device'}</DialogTitle>
                     </DialogHeader>
 
                     <form className="space-y-3" onSubmit={submitEdit}>
@@ -291,8 +310,10 @@ export default function DevicesUsers({ device, result }: Props) {
                         </div>
 
                         <p className="text-[11px] text-muted-foreground">
-                            Saving writes the change to slot {editingUid} on the device. Non-ASCII names are auto-converted;
-                            user id ≤ 9 digits, PIN ≤ 8 digits.
+                            {editingUid === null
+                                ? 'The user is written to the next free slot on the device. '
+                                : `Saving overwrites slot ${editingUid} on the device. `}
+                            Non-ASCII names are auto-converted; user id ≤ 9 digits, PIN ≤ 8 digits.
                         </p>
 
                         <DialogFooter>
@@ -302,8 +323,10 @@ export default function DevicesUsers({ device, result }: Props) {
                             <Button type="submit" disabled={saving}>
                                 {saving ? (
                                     <span className="inline-flex items-center gap-1.5">
-                                        <ConnectingDots /> Saving
+                                        <ConnectingDots /> {editingUid === null ? 'Adding' : 'Saving'}
                                     </span>
+                                ) : editingUid === null ? (
+                                    'Add to device'
                                 ) : (
                                     'Save to device'
                                 )}

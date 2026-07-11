@@ -98,6 +98,27 @@ class DeviceController extends Controller
         ]);
     }
 
+    public function storeDeviceUser(Device $device, DeviceUserRequest $request, ImportedUserValidator $validator, ZktecoDeviceService $service): RedirectResponse
+    {
+        $data = $validator->validate(
+            $request->input('user_id'),
+            $request->input('name'),
+            $request->input('password'),
+            $request->input('card_number'),
+            $request->input('privilege'),
+        );
+
+        if (! $data['is_valid']) {
+            return back()->with('error', 'Cannot add: '.implode(' ', $data['errors']));
+        }
+
+        $result = $service->createDeviceUser($device, $data);
+
+        return $result['ok']
+            ? back()->with('success', 'User added to the device.')
+            : back()->with('error', 'Add failed: '.($result['error'] ?? 'unknown error'));
+    }
+
     public function updateDeviceUser(Device $device, string $uid, DeviceUserRequest $request, ImportedUserValidator $validator, ZktecoDeviceService $service): RedirectResponse
     {
         $data = $validator->validate(

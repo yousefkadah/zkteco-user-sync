@@ -1,4 +1,4 @@
-import { Monitor, Upload } from 'lucide-react';
+import { House, Monitor, Upload } from 'lucide-react';
 import type { ComponentType } from 'react';
 
 export interface NavItem {
@@ -10,10 +10,16 @@ export interface NavItem {
 
 export const NAVIGATION: NavItem[] = [
     {
-        label: 'Imports',
+        label: 'Home',
         href: '/',
+        icon: House,
+        isActive: (path) => path === '/',
+    },
+    {
+        label: 'Imports',
+        href: '/import',
         icon: Upload,
-        isActive: (path) => path === '/' || path.startsWith('/import'),
+        isActive: (path) => path.startsWith('/import'),
     },
     {
         label: 'Devices',
