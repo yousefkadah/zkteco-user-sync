@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\DeviceController;
+use App\Http\Controllers\FullnessConnectionController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\SyncController;
 use App\Http\Controllers\TemplateController;
@@ -11,6 +12,13 @@ use Inertia\Inertia;
 use Native\Desktop\Facades\AutoUpdater;
 
 Route::get('/', fn () => Inertia::render('Home/Index'))->name('home');
+
+// Connectors — connect to Fullness CRM and pull assigned users into an import.
+Route::get('/connectors', [FullnessConnectionController::class, 'index'])->name('connectors.index');
+Route::post('/connectors/connect', [FullnessConnectionController::class, 'connect'])->name('connectors.connect');
+Route::post('/connectors/tenant', [FullnessConnectionController::class, 'selectTenant'])->name('connectors.tenant');
+Route::post('/connectors/fetch', [FullnessConnectionController::class, 'fetch'])->name('connectors.fetch');
+Route::delete('/connectors', [FullnessConnectionController::class, 'disconnect'])->name('connectors.disconnect');
 Route::get('/import', [ImportController::class, 'index'])->name('import.index');
 Route::post('/import', [ImportController::class, 'store'])->name('import.store');
 Route::get('/import/{batch}', [ImportController::class, 'show'])->name('import.show');

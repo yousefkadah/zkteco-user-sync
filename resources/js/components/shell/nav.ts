@@ -1,4 +1,4 @@
-import { House, Monitor, Upload } from 'lucide-react';
+import { Cloud, House, Monitor, Upload } from 'lucide-react';
 import type { ComponentType } from 'react';
 
 export interface NavItem {
@@ -14,6 +14,12 @@ export const NAVIGATION: NavItem[] = [
         href: '/',
         icon: House,
         isActive: (path) => path === '/',
+    },
+    {
+        label: 'Connectors',
+        href: '/connectors',
+        icon: Cloud,
+        isActive: (path) => path.startsWith('/connectors'),
     },
     {
         label: 'Imports',
