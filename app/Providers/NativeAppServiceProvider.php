@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use Illuminate\Support\Facades\Artisan;
 use Native\Desktop\Contracts\ProvidesPhpIni;
 use Native\Desktop\Facades\Window;
 
@@ -13,6 +14,17 @@ class NativeAppServiceProvider implements ProvidesPhpIni
      */
     public function boot(): void
     {
+        // Keep the app's schema current on every launch. NativePHP only runs
+        // migrations when nativephp.sqlite is first created, so users updating
+        // from an older version (whose database already exists) would otherwise
+        // miss new tables — e.g. the Fullness connector's fullness_connections.
+        // Idempotent: already-run migrations are skipped.
+        try {
+            Artisan::call('native:migrate', ['--force' => true]);
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+
         $window = Window::open()
             ->title(config('app.name', 'ZKTeco User Sync'))
             ->width(1280)
