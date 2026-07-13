@@ -81,7 +81,10 @@ export default {
         publisher: process.env.MSIX_PUBLISHER, // e.g. "CN=1234ABCD-....." from Partner Center
         publisherDisplayName: process.env.MSIX_PUBLISHER_DISPLAY_NAME || appAuthor,
         applicationId: 'App',
-        displayName: appName,
+        // Store-compliant name: Microsoft rejects "ZKTeco" (another company's
+        // trademark) in the product name. The direct .exe/.dmg/.AppImage keep
+        // "ZKTeco User Sync"; only the Store listing + this MSIX use this name.
+        displayName: 'Fullness Device Sync',
         backgroundColor: '#0b1220',
         showNameOnTiles: true,
         languages: ['en-US'],
