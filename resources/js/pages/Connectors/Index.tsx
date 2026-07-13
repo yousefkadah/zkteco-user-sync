@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { Building2, Check, DownloadCloud, Loader2, Plug, ShieldCheck, Unplug } from 'lucide-react';
+import { Building2, Check, DownloadCloud, Loader2, Monitor, Plug, ShieldCheck, Unplug } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,11 +21,22 @@ interface Tenant {
     logo_url?: string | null;
 }
 
+interface FullnessDevice {
+    id: number | string;
+    name: string;
+    serial_number?: string | null;
+    connection_mode?: string | null;
+    assigned_count?: number;
+    online?: boolean;
+}
+
 interface Connection {
     base_url: string;
     owner_email: string | null;
     tenant_id: string | null;
     tenant_name: string | null;
+    fullness_device_id: string | null;
+    fullness_device_name: string | null;
     last_connected_at: string | null;
     last_synced_at: string | null;
 }
@@ -33,11 +44,12 @@ interface Connection {
 interface Props {
     connection: Connection | null;
     tenants: Tenant[];
+    devices: FullnessDevice[];
     defaultBaseUrl: string;
     deviceCount: number;
 }
 
-export default function ConnectorsIndex({ connection, tenants, defaultBaseUrl, deviceCount }: Props) {
+export default function ConnectorsIndex({ connection, tenants, devices, defaultBaseUrl, deviceCount }: Props) {
     const [open, setOpen] = useState(false);
     const [baseUrl, setBaseUrl] = useState(connection?.base_url ?? defaultBaseUrl);
     const [email, setEmail] = useState('');
@@ -45,10 +57,13 @@ export default function ConnectorsIndex({ connection, tenants, defaultBaseUrl, d
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [processing, setProcessing] = useState(false);
     const [selectingId, setSelectingId] = useState<string | null>(null);
+    const [selectingDeviceId, setSelectingDeviceId] = useState<string | null>(null);
+    const [changingTenant, setChangingTenant] = useState(false);
     const [fetching, setFetching] = useState(false);
 
     const isConnected = Boolean(connection);
-    const isReady = Boolean(connection?.tenant_id);
+    const hasTenant = Boolean(connection?.tenant_id);
+    const isReady = Boolean(connection?.fullness_device_id);
 
     usePageStatus(
         () => ({
@@ -89,6 +104,19 @@ export default function ConnectorsIndex({ connection, tenants, defaultBaseUrl, d
                 preserveScroll: true,
                 onStart: () => setSelectingId(tenant.id),
                 onFinish: () => setSelectingId(null),
+                onSuccess: () => setChangingTenant(false),
+            },
+        );
+    };
+
+    const selectDevice = (device: FullnessDevice) => {
+        router.post(
+            '/connectors/device',
+            { device_id: device.id },
+            {
+                preserveScroll: true,
+                onStart: () => setSelectingDeviceId(String(device.id)),
+                onFinish: () => setSelectingDeviceId(null),
             },
         );
     };
@@ -103,8 +131,6 @@ export default function ConnectorsIndex({ connection, tenants, defaultBaseUrl, d
         }
         router.delete('/connectors', { preserveScroll: true, onSuccess: () => setOpen(false) });
     };
-
-    const formatDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '—');
 
     return (
         <Page>
@@ -248,7 +274,7 @@ export default function ConnectorsIndex({ connection, tenants, defaultBaseUrl, d
                     )}
 
                     {/* Step 2 — choose the business */}
-                    {isConnected && !isReady && (
+                    {isConnected && (!hasTenant || changingTenant) && (
                         <div className="space-y-3">
                             {connection?.owner_email && (
                                 <p className="text-[11px] text-muted-foreground">
@@ -289,30 +315,69 @@ export default function ConnectorsIndex({ connection, tenants, defaultBaseUrl, d
                         </div>
                     )}
 
-                    {/* Step 3 — fetch & sync */}
-                    {isReady && (
+                    {/* Step 3 — choose the device, then fetch & sync */}
+                    {hasTenant && !changingTenant && (
                         <div className="space-y-3">
-                            <div className="flex items-center gap-2 rounded-md bg-success-soft px-3 py-2 text-[12px] text-success">
-                                <Check className="size-4 shrink-0" />
-                                <span>
-                                    Connected to <span className="font-semibold">{connection?.tenant_name}</span>
-                                </span>
+                            <div className="flex items-center justify-between gap-2">
+                                <p className="text-[11px] text-muted-foreground">
+                                    Business: <span className="font-medium text-foreground">{connection?.tenant_name}</span>
+                                </p>
+                                {tenants.length > 1 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setChangingTenant(true)}
+                                        className="text-[11px] font-medium text-accent-brand hover:underline"
+                                    >
+                                        Change
+                                    </button>
+                                )}
                             </div>
 
-                            <dl className="grid grid-cols-2 gap-2 text-[12px]">
-                                <div>
-                                    <dt className="text-muted-foreground">Account</dt>
-                                    <dd className="truncate font-medium">{connection?.owner_email ?? '—'}</dd>
-                                </div>
-                                <div>
-                                    <dt className="text-muted-foreground">Last fetch</dt>
-                                    <dd className="font-medium">{formatDate(connection?.last_synced_at ?? null)}</dd>
-                                </div>
-                            </dl>
+                            <p className="text-[12px] font-medium">Choose the device to sync</p>
+                            <div className="space-y-1.5">
+                                {devices.map((device) => {
+                                    const active = String(device.id) === connection?.fullness_device_id;
+                                    return (
+                                        <button
+                                            key={device.id}
+                                            type="button"
+                                            onClick={() => selectDevice(device)}
+                                            disabled={selectingDeviceId !== null}
+                                            className={cn(
+                                                'flex w-full items-center gap-3 rounded-md border px-3 py-2 text-start transition-colors',
+                                                active
+                                                    ? 'border-accent-brand bg-accent-brand/5'
+                                                    : 'border-border hover:border-accent-brand hover:bg-accent/40',
+                                            )}
+                                        >
+                                            <Monitor
+                                                className={cn('size-4 shrink-0', active ? 'text-accent-brand' : 'text-muted-foreground')}
+                                            />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate text-[13px] font-medium">{device.name}</p>
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    {device.assigned_count ?? 0} user{device.assigned_count === 1 ? '' : 's'}
+                                                    {device.serial_number ? ` · ${device.serial_number}` : ''}
+                                                </p>
+                                            </div>
+                                            {selectingDeviceId === String(device.id) ? (
+                                                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                                            ) : active ? (
+                                                <Check className="size-4 text-accent-brand" />
+                                            ) : null}
+                                        </button>
+                                    );
+                                })}
+                                {devices.length === 0 && (
+                                    <p className="text-[12px] text-muted-foreground">
+                                        This business has no attendance devices in Fullness.
+                                    </p>
+                                )}
+                            </div>
 
                             {deviceCount === 0 && (
                                 <p className="rounded-md bg-muted px-3 py-2 text-[12px] text-warning">
-                                    No devices yet.{' '}
+                                    No local devices yet.{' '}
                                     <Link href="/devices" className="font-medium underline">
                                         Add a device
                                     </Link>{' '}
@@ -320,16 +385,11 @@ export default function ConnectorsIndex({ connection, tenants, defaultBaseUrl, d
                                 </p>
                             )}
 
-                            <p className="text-[11px] text-muted-foreground">
-                                Pulls all assigned users for this business into a new import, then opens it so you can pick a
-                                device and sync.
-                            </p>
-
                             <div className="flex items-center justify-between pt-1">
                                 <Button variant="ghost" size="sm" onClick={disconnect}>
                                     <Unplug className="size-4" /> Disconnect
                                 </Button>
-                                <Button onClick={fetchUsers} disabled={fetching}>
+                                <Button onClick={fetchUsers} disabled={!isReady || fetching}>
                                     {fetching ? (
                                         <span className="inline-flex items-center gap-1.5">
                                             <ConnectingDots /> Fetching

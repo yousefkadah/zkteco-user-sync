@@ -27,6 +27,10 @@ class FullnessConnectorTest extends TestCase
                 ],
                 'owner_email' => 'owner@biz.co.il',
             ]);
+        // The single business is auto-selected, so its devices are loaded too.
+        $client->shouldReceive('devices')->once()->andReturn([
+            ['id' => 5, 'name' => 'Front Door', 'assigned_count' => 3],
+        ]);
         $this->instance(FullnessClient::class, $client);
 
         $this->post('/connectors/connect', [
@@ -42,6 +46,8 @@ class FullnessConnectorTest extends TestCase
         $this->assertSame('t1', $connection->tenant_id);
         $this->assertSame('Biz One', $connection->tenant_name);
         $this->assertSame('1|secret-token', $connection->token); // decrypted via cast
+        $this->assertSame('5', $connection->fullness_device_id); // single device auto-selected
+        $this->assertSame('Front Door', $connection->fullness_device_name);
         $this->assertTrue($connection->isReady());
     }
 
@@ -92,6 +98,9 @@ class FullnessConnectorTest extends TestCase
             'tenants' => [['id' => 't1', 'name' => 'Biz One']],
             'tenant_id' => 't1',
             'tenant_name' => 'Biz One',
+            'devices' => [['id' => 1, 'name' => 'Front Door']],
+            'fullness_device_id' => '1',
+            'fullness_device_name' => 'Front Door',
             'owner_email' => 'owner@biz.co.il',
         ]);
 
@@ -131,6 +140,76 @@ class FullnessConnectorTest extends TestCase
             ->assertSessionHas('error');
 
         $this->assertDatabaseCount('import_batches', 0);
+    }
+
+    public function test_select_tenant_loads_devices_and_auto_selects_a_single_device(): void
+    {
+        FullnessConnection::create([
+            'base_url' => 'https://fullness.co.il',
+            'token' => '1|secret-token',
+            'tenants' => [['id' => 't1', 'name' => 'Biz One'], ['id' => 't2', 'name' => 'Biz Two']],
+            'owner_email' => 'owner@biz.co.il',
+        ]);
+
+        $client = Mockery::mock(FullnessClient::class);
+        $client->shouldReceive('devices')->once()->andReturn([
+            ['id' => 9, 'name' => 'Only Device', 'assigned_count' => 4],
+        ]);
+        $this->instance(FullnessClient::class, $client);
+
+        $this->post('/connectors/tenant', ['tenant_id' => 't1'])->assertRedirect();
+
+        $connection = FullnessConnection::current();
+        $this->assertSame('t1', $connection->tenant_id);
+        $this->assertCount(1, $connection->devices);
+        $this->assertSame('9', $connection->fullness_device_id); // auto-selected
+        $this->assertTrue($connection->isReady());
+    }
+
+    public function test_select_tenant_lists_multiple_devices_without_auto_selecting(): void
+    {
+        FullnessConnection::create([
+            'base_url' => 'https://fullness.co.il',
+            'token' => '1|secret-token',
+            'tenants' => [['id' => 't1', 'name' => 'Biz One']],
+        ]);
+
+        $client = Mockery::mock(FullnessClient::class);
+        $client->shouldReceive('devices')->once()->andReturn([
+            ['id' => 1, 'name' => 'Sakhnin', 'assigned_count' => 100],
+            ['id' => 2, 'name' => 'Kafr Manda', 'assigned_count' => 80],
+        ]);
+        $this->instance(FullnessClient::class, $client);
+
+        $this->post('/connectors/tenant', ['tenant_id' => 't1'])->assertRedirect();
+
+        $connection = FullnessConnection::current();
+        $this->assertCount(2, $connection->devices);
+        $this->assertNull($connection->fullness_device_id); // must choose one
+        $this->assertTrue($connection->hasTenant());
+        $this->assertFalse($connection->isReady());
+    }
+
+    public function test_select_device_sets_the_chosen_device(): void
+    {
+        FullnessConnection::create([
+            'base_url' => 'https://fullness.co.il',
+            'token' => '1|secret-token',
+            'tenants' => [['id' => 't1', 'name' => 'Biz One']],
+            'tenant_id' => 't1',
+            'tenant_name' => 'Biz One',
+            'devices' => [
+                ['id' => 1, 'name' => 'Sakhnin'],
+                ['id' => 2, 'name' => 'Kafr Manda'],
+            ],
+        ]);
+
+        $this->post('/connectors/device', ['device_id' => 2])->assertRedirect();
+
+        $connection = FullnessConnection::current();
+        $this->assertSame('2', $connection->fullness_device_id);
+        $this->assertSame('Kafr Manda', $connection->fullness_device_name);
+        $this->assertTrue($connection->isReady());
     }
 
     public function test_disconnect_removes_the_connection(): void

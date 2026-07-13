@@ -17,6 +17,7 @@ Route::get('/', fn () => Inertia::render('Home/Index'))->name('home');
 Route::get('/connectors', [FullnessConnectionController::class, 'index'])->name('connectors.index');
 Route::post('/connectors/connect', [FullnessConnectionController::class, 'connect'])->name('connectors.connect');
 Route::post('/connectors/tenant', [FullnessConnectionController::class, 'selectTenant'])->name('connectors.tenant');
+Route::post('/connectors/device', [FullnessConnectionController::class, 'selectDevice'])->name('connectors.device');
 Route::post('/connectors/fetch', [FullnessConnectionController::class, 'fetch'])->name('connectors.fetch');
 Route::delete('/connectors', [FullnessConnectionController::class, 'disconnect'])->name('connectors.disconnect');
 Route::get('/import', [ImportController::class, 'index'])->name('import.index');

@@ -114,7 +114,9 @@ class FullnessClient
                     'expiration-time' => (string) $connection->tenant_id,
                     'X-Access-Type' => 'staff',
                 ])
-                ->get($baseUrl.'/api/v1/desktop/attendance/assigned-users');
+                ->get($baseUrl.'/api/v1/desktop/attendance/assigned-users', array_filter([
+                    'device_id' => $connection->fullness_device_id, // scope to the chosen device
+                ]));
         } catch (ConnectionException) {
             throw new RuntimeException("Could not reach Fullness at {$baseUrl}. Check your internet connection.");
         }
@@ -138,6 +140,52 @@ class FullnessClient
         $users = $body['assigned_users'] ?? [];
 
         return is_array($users) ? array_values($users) : [];
+    }
+
+    /**
+     * Fetch the selected tenant's attendance devices so the operator can pick
+     * which one's assigned users to sync.
+     *
+     * @return list<array<string, mixed>>
+     *
+     * @throws RuntimeException on any failure, with a user-facing message.
+     */
+    public function devices(FullnessConnection $connection): array
+    {
+        $baseUrl = $this->normaliseBaseUrl($connection->base_url);
+
+        try {
+            $response = Http::acceptJson()
+                ->timeout(self::TIMEOUT)
+                ->withToken($connection->token)
+                ->withHeaders([
+                    'expiration-time' => (string) $connection->tenant_id,
+                    'X-Access-Type' => 'staff',
+                ])
+                ->get($baseUrl.'/api/v1/desktop/attendance/devices');
+        } catch (ConnectionException) {
+            throw new RuntimeException("Could not reach Fullness at {$baseUrl}. Check your internet connection.");
+        }
+
+        if ($response->status() === 401) {
+            throw new RuntimeException('Your Fullness session has expired. Please reconnect.');
+        }
+
+        if ($response->status() === 403) {
+            throw new RuntimeException('This account does not have permission to manage attendance devices for this business.');
+        }
+
+        $body = $this->decodeBody($response);
+
+        if ($response->failed()) {
+            throw new RuntimeException(
+                $body['info'] ?? $body['message'] ?? 'Failed to load devices from Fullness.'
+            );
+        }
+
+        $devices = $body['devices'] ?? [];
+
+        return is_array($devices) ? array_values($devices) : [];
     }
 
     /**

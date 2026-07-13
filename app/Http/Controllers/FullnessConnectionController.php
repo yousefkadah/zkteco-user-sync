@@ -36,10 +36,13 @@ class FullnessConnectionController extends Controller
                 'owner_email' => $connection->owner_email,
                 'tenant_id' => $connection->tenant_id,
                 'tenant_name' => $connection->tenant_name,
+                'fullness_device_id' => $connection->fullness_device_id,
+                'fullness_device_name' => $connection->fullness_device_name,
                 'last_connected_at' => $connection->last_connected_at?->toIso8601String(),
                 'last_synced_at' => $connection->last_synced_at?->toIso8601String(),
             ] : null,
             'tenants' => $connection?->tenants ?? [],
+            'devices' => $connection?->devices ?? [],
             'defaultBaseUrl' => self::DEFAULT_BASE_URL,
             'deviceCount' => Device::count(),
         ]);
@@ -74,7 +77,7 @@ class FullnessConnectionController extends Controller
 
         // Single-connection app: replace any previous connection.
         FullnessConnection::query()->delete();
-        FullnessConnection::create([
+        $connection = FullnessConnection::create([
             'base_url' => $validated['base_url'],
             'token' => $result['token'],
             'owner_email' => $result['owner_email'],
@@ -84,9 +87,17 @@ class FullnessConnectionController extends Controller
             'last_connected_at' => now(),
         ]);
 
-        return back()->with('success', $selected
-            ? "Connected to {$selected['name']}."
-            : 'Connected. Choose a business to continue.');
+        if (! $selected) {
+            return back()->with('success', 'Connected. Choose a business to continue.');
+        }
+
+        // The single business was auto-selected — load its devices so the
+        // operator can pick which one to sync.
+        if ($error = $this->loadTenantDevices($connection)) {
+            return back()->with('error', "Connected, but couldn't load devices: {$error}");
+        }
+
+        return back()->with('success', "Connected to {$selected['name']}.");
     }
 
     public function selectTenant(Request $request): RedirectResponse
@@ -102,19 +113,53 @@ class FullnessConnectionController extends Controller
             return back()->with('error', 'Unknown business.');
         }
 
+        // Switching business resets any prior device selection.
         $connection->update([
             'tenant_id' => $tenant['id'],
             'tenant_name' => $tenant['name'],
+            'devices' => null,
+            'fullness_device_id' => null,
+            'fullness_device_name' => null,
         ]);
 
-        return back()->with('success', "Business set to {$tenant['name']}.");
+        if ($error = $this->loadTenantDevices($connection)) {
+            return back()->with('error', $error);
+        }
+
+        $connection->refresh();
+
+        return back()->with('success', $connection->fullness_device_name
+            ? "Business set to {$tenant['name']} — device “{$connection->fullness_device_name}”."
+            : "Business set to {$tenant['name']}. Choose a device.");
+    }
+
+    public function selectDevice(Request $request): RedirectResponse
+    {
+        $connection = FullnessConnection::current();
+        if (! $connection || ! $connection->hasTenant()) {
+            return back()->with('error', 'Choose a business first.');
+        }
+
+        $deviceId = (string) $request->input('device_id');
+        $device = collect($connection->devices ?? [])
+            ->first(fn ($d) => is_array($d) && (string) ($d['id'] ?? '') === $deviceId);
+        if (! $device) {
+            return back()->with('error', 'Unknown device.');
+        }
+
+        $connection->update([
+            'fullness_device_id' => (string) $device['id'],
+            'fullness_device_name' => $device['name'] ?? null,
+        ]);
+
+        return back()->with('success', "Device set to “{$device['name']}”.");
     }
 
     public function fetch(ImportedUserValidator $validator): RedirectResponse
     {
         $connection = FullnessConnection::current();
         if (! $connection || ! $connection->isReady()) {
-            return back()->with('error', 'Connect to Fullness and choose a business first.');
+            return back()->with('error', 'Connect to Fullness and choose a business and device first.');
         }
 
         try {
@@ -124,13 +169,14 @@ class FullnessConnectionController extends Controller
         }
 
         if ($users === []) {
-            return back()->with('error', 'No assigned users were found for this business.');
+            return back()->with('error', 'No users are assigned to this device in Fullness.');
         }
 
         [$records, $validCount] = $this->buildRecords($users, $validator);
 
+        $label = trim(($connection->tenant_name ?: $connection->tenant_id).' / '.($connection->fullness_device_name ?: 'device'), ' /');
         $batch = ImportBatch::create([
-            'original_filename' => 'Fullness — '.($connection->tenant_name ?: $connection->tenant_id),
+            'original_filename' => 'Fullness — '.$label,
             'total_rows' => count($records),
             'valid_rows' => $validCount,
             'invalid_rows' => count($records) - $validCount,
@@ -160,6 +206,31 @@ class FullnessConnectionController extends Controller
         FullnessConnection::query()->delete();
 
         return redirect()->route('connectors.index')->with('success', 'Disconnected from Fullness.');
+    }
+
+    /**
+     * Load the connection's selected-tenant devices from Fullness, store them,
+     * and auto-select the device when the tenant has exactly one. Returns a
+     * user-facing error message on failure, or null on success (including the
+     * "no devices" case, which the UI handles).
+     */
+    private function loadTenantDevices(FullnessConnection $connection): ?string
+    {
+        try {
+            $devices = $this->client->devices($connection);
+        } catch (\Throwable $e) {
+            return $e->getMessage();
+        }
+
+        $selected = count($devices) === 1 ? $devices[0] : null;
+
+        $connection->update([
+            'devices' => $devices,
+            'fullness_device_id' => isset($selected['id']) ? (string) $selected['id'] : null,
+            'fullness_device_name' => $selected['name'] ?? null,
+        ]);
+
+        return null;
     }
 
     /**

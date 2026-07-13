@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
+use App\Models\FullnessConnection;
 use App\Services\Fullness\FullnessClient;
 use App\Support\Fullness\FullnessCipher;
 use Illuminate\Support\Facades\Http;
@@ -71,5 +72,31 @@ class FullnessClientEncryptionTest extends TestCase
         $this->expectExceptionMessage('The provided credentials are incorrect.');
 
         app(FullnessClient::class)->login('https://fullness.co.il', 'owner@biz.co', 'wrong', 'dev');
+    }
+
+    public function test_assigned_users_scopes_the_request_to_the_selected_device(): void
+    {
+        Http::fake([
+            '*/api/v1/desktop/attendance/assigned-users*' => Http::response([
+                'data' => FullnessCipher::encrypt((string) json_encode([
+                    'success' => true,
+                    'assigned_users' => [
+                        ['device_user_id' => 1, 'name' => 'X', 'name_ascii' => 'X', 'privilege' => 0, 'password' => '111111', 'card_number' => null],
+                    ],
+                ])),
+            ], 200),
+        ]);
+
+        $connection = new FullnessConnection([
+            'base_url' => 'https://fullness.co.il',
+            'token' => '1|abc',
+            'tenant_id' => 't1',
+            'fullness_device_id' => '7',
+        ]);
+
+        $users = app(FullnessClient::class)->assignedUsers($connection);
+
+        $this->assertCount(1, $users);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'device_id=7'));
     }
 }
