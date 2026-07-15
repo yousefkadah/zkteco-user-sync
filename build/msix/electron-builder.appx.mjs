@@ -46,7 +46,17 @@ export default {
     productName: appName,
     copyright: appCopyright,
     directories: {
-        buildResources: 'build',
+        // Point electron-builder's build resources at the REPO's build/ dir,
+        // which holds our branded Microsoft Store tiles (build/appx/*.png) and
+        // build/icon.ico. electron-builder resolves buildResources via
+        // path.resolve(projectDir, value); its projectDir is the NativePHP
+        // electron project it runs from (the vendored resources/electron/ dir in
+        // CI), whose build/ has NO appx/ subdir — so the bare 'build' string made
+        // it emit its blank default tile and the Store rejected it (10.1.1.11
+        // "default image"). An ABSOLUTE path overrides projectDir entirely and
+        // points straight at our tiles. APP_PATH is the Laravel repo root
+        // (base_path()), the same value already used for `output` below.
+        buildResources: join(process.env.APP_PATH, 'build'),
         output: join(process.env.APP_PATH, 'nativephp', 'electron', 'dist'),
     },
     files: [
