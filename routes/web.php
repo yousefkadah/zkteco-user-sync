@@ -13,6 +13,12 @@ use Native\Desktop\Facades\AutoUpdater;
 
 Route::get('/', fn () => Inertia::render('Home/Index'))->name('home');
 
+// The window's landing page (see NativeAppServiceProvider). A bundle-free splash
+// so Electron's did-finish-load fires at once and the window becomes visible with
+// the logo + progress, instead of staying hidden until the whole app bundle has
+// loaded. It redirects here to '/' as soon as it has painted.
+Route::get('/splash', fn () => view('splash'))->name('splash');
+
 // Connectors — connect to Fullness CRM and pull assigned users into an import.
 Route::get('/connectors', [FullnessConnectionController::class, 'index'])->name('connectors.index');
 Route::post('/connectors/connect', [FullnessConnectionController::class, 'connect'])->name('connectors.connect');

@@ -26,6 +26,13 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         }
 
         $window = Window::open()
+            // Land on the bundle-free splash rather than '/'. NativePHP creates the
+            // window hidden and only reveals it on Electron's `did-finish-load`,
+            // which waits for every subresource — so landing on the app meant no
+            // window appeared until the entire React bundle had downloaded, making
+            // startup look frozen. The splash finishes loading immediately, so the
+            // window shows the logo + progress right away and then hands off to '/'.
+            ->url(url('/splash'))
             ->title(config('app.name', 'ZKTeco User Sync'))
             ->width(1280)
             ->height(860)
