@@ -95,4 +95,65 @@ class UserSpreadsheetParserTest extends TestCase
         $this->assertFalse($rows[1]->isValid());
         $this->assertStringContainsString('Duplicate', implode(' ', $rows[1]->errors));
     }
+
+    /**
+     * @return list<ParsedUserRow>
+     */
+    private function parseCsv(string $contents): array
+    {
+        $path = SpreadsheetFactory::csvRaw($contents);
+        $this->tempFiles[] = $path;
+
+        return (new UserSpreadsheetParser)->parse($path);
+    }
+
+    public function test_it_finds_the_header_below_a_title_row(): void
+    {
+        $rows = $this->parse([
+            ['ZKTeco Users'],
+            ['user_id', 'name', 'password'],
+            ['1001', 'Dana', '1234'],
+        ]);
+
+        $this->assertCount(1, $rows);
+        $this->assertTrue($rows[0]->isValid());
+        $this->assertSame('1001', $rows[0]->userId);
+        // Row number tracks the file's own line, so the data row is line 3.
+        $this->assertSame(3, $rows[0]->rowNumber);
+    }
+
+    public function test_it_finds_the_header_below_a_leading_blank_row(): void
+    {
+        $rows = $this->parseCsv("\r\nuser_id,name\r\n1001,Dana\r\n");
+
+        $this->assertCount(1, $rows);
+        $this->assertTrue($rows[0]->isValid());
+        $this->assertSame('Dana', $rows[0]->name);
+    }
+
+    public function test_it_reads_a_csv_saved_with_lone_cr_line_endings(): void
+    {
+        // Old-Mac newlines: PHP 8.1+ dropped auto_detect_line_endings, so without
+        // normalising these the whole file collapses onto a single line.
+        $rows = $this->parseCsv("user_id,name\r1001,Dana\r1002,Yossi\r");
+
+        $this->assertCount(2, $rows);
+        $this->assertSame('Dana', $rows[0]->name);
+        $this->assertSame('Yossi', $rows[1]->name);
+    }
+
+    public function test_it_reads_a_csv_with_a_utf8_bom_and_crlf(): void
+    {
+        $rows = $this->parseCsv("\xEF\xBB\xBFuser_id,name\r\n1001,Dana\r\n");
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('Dana', $rows[0]->name);
+    }
+
+    public function test_it_still_rejects_a_file_with_no_name_column(): void
+    {
+        $this->expectExceptionMessageMatches('/No "name" column was found/');
+
+        $this->parseCsv("foo,bar\r\n1,2\r\n");
+    }
 }

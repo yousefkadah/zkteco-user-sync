@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Import;
 
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Reader\Csv;
 use RuntimeException;
 
 /**
@@ -27,6 +28,13 @@ class UserSpreadsheetParser
         'privilege' => ['privilege', 'role', 'level', 'access level', 'admin', 'type', 'הרשאה', 'תפקיד', 'רמה'],
     ];
 
+    /**
+     * How many leading rows to scan for the header. Files exported by hand often
+     * carry a title line or a blank line above the real header row, so we don't
+     * assume row 1 is always the header.
+     */
+    private const HEADER_SCAN_LIMIT = 15;
+
     public function __construct(private ImportedUserValidator $validator = new ImportedUserValidator) {}
 
     /**
@@ -34,12 +42,29 @@ class UserSpreadsheetParser
      */
     public function parse(string $path): array
     {
+        $cleanup = null;
+
         try {
             $reader = IOFactory::createReaderForFile($path);
             $reader->setReadDataOnly(true);
-            $spreadsheet = $reader->load($path);
+
+            // A CSV saved with old-Mac ("\r") or mixed line endings collapses onto
+            // one line under PHP 8.1+ (which dropped auto_detect_line_endings), so
+            // the header row is never found. Normalise first when needed.
+            $loadPath = $path;
+
+            if ($reader instanceof Csv) {
+                $loadPath = $this->normaliseCsvLineEndings($path);
+                $cleanup = $loadPath !== $path ? $loadPath : null;
+            }
+
+            $spreadsheet = $reader->load($loadPath);
         } catch (\Throwable $e) {
-            throw new RuntimeException('Could not read the spreadsheet: '.$e->getMessage(), previous: $e);
+            throw new RuntimeException($this->readErrorMessage($e), previous: $e);
+        } finally {
+            if ($cleanup !== null) {
+                @unlink($cleanup);
+            }
         }
 
         $rows = $spreadsheet->getActiveSheet()->toArray(null, true, false, false);
@@ -48,27 +73,110 @@ class UserSpreadsheetParser
             throw new RuntimeException('The spreadsheet is empty.');
         }
 
-        $header = array_shift($rows);
-        $map = $this->mapColumns($header);
+        [$headerIndex, $map] = $this->locateHeaderRow($rows);
 
-        if (! array_key_exists('name', $map)) {
-            throw new RuntimeException('No "name" column was found. Add a header row with at least "user_id" and "name".');
+        if ($headerIndex === null) {
+            throw new RuntimeException('No "name" column was found. Add a header row with at least "user_id" and "name" (download the Template for the exact format).');
         }
 
         $parsed = [];
-        $rowNumber = 1; // header is row 1
 
-        foreach ($rows as $row) {
-            $rowNumber++;
-
-            if ($this->isBlankRow($row)) {
+        foreach ($rows as $index => $row) {
+            if ($index <= $headerIndex || $this->isBlankRow($row)) {
                 continue;
             }
 
-            $parsed[] = $this->buildRow($rowNumber, $row, $map);
+            // 1-based row number matching the file's own line for error messages.
+            $parsed[] = $this->buildRow($index + 1, $row, $map);
         }
 
         return $this->flagDuplicateUserIds($parsed);
+    }
+
+    /**
+     * Locate the header row. Returns the first row that maps a "name" column
+     * (preferring one that also maps another known field, so a stray data row
+     * can't win), together with its canonical field => column-index map.
+     *
+     * @param  list<array<int, mixed>>  $rows
+     * @return array{0: int|null, 1: array<string, int>}
+     */
+    private function locateHeaderRow(array $rows): array
+    {
+        $fallbackIndex = null;
+        $fallbackMap = [];
+
+        $scan = min(count($rows), self::HEADER_SCAN_LIMIT);
+
+        for ($index = 0; $index < $scan; $index++) {
+            if ($this->isBlankRow($rows[$index])) {
+                continue;
+            }
+
+            $map = $this->mapColumns($rows[$index]);
+
+            if (! array_key_exists('name', $map)) {
+                continue;
+            }
+
+            // A row that maps "name" plus at least one more field is unambiguously
+            // the header — take it immediately.
+            if (count($map) >= 2) {
+                return [$index, $map];
+            }
+
+            // Otherwise remember the first name-only header as a fallback.
+            if ($fallbackIndex === null) {
+                $fallbackIndex = $index;
+                $fallbackMap = $map;
+            }
+        }
+
+        return [$fallbackIndex, $fallbackMap];
+    }
+
+    /**
+     * Rewrite a CSV with lone-CR (old-Mac) or mixed line endings to LF so
+     * PhpSpreadsheet reads its rows. Returns the original path when no rewrite is
+     * needed; otherwise a temp file the caller/finally block cleans up.
+     */
+    private function normaliseCsvLineEndings(string $path): string
+    {
+        $contents = @file_get_contents($path);
+
+        if ($contents === false || $contents === '') {
+            return $path;
+        }
+
+        // Leave UTF-16/UTF-32 alone — byte-level CR replacement would corrupt the
+        // encoding, and PhpSpreadsheet already handles their line endings.
+        $bom = substr($contents, 0, 2);
+
+        if ($bom === "\xFF\xFE" || $bom === "\xFE\xFF") {
+            return $path;
+        }
+
+        // Only act when there is a lone CR (not part of a CRLF pair).
+        if (! preg_match("/\r(?!\n)/", $contents)) {
+            return $path;
+        }
+
+        $normalised = (string) preg_replace("/\r\n?/", "\n", $contents);
+        $tmp = (tempnam(sys_get_temp_dir(), 'zk_csvnorm_') ?: $path).'.csv';
+        @file_put_contents($tmp, $normalised);
+
+        return $tmp;
+    }
+
+    /**
+     * Turn a spreadsheet read failure into a user-actionable message. Reading
+     * .xlsx works on the bundled runtime (PhpSpreadsheet's Xlsx reader uses
+     * SimpleXML + zip, both present), so an unreadable workbook is genuinely a
+     * bad file — suggest CSV as the fallback rather than guessing a cause.
+     */
+    private function readErrorMessage(\Throwable $e): string
+    {
+        return 'Could not read the spreadsheet: '.$e->getMessage().' If this keeps happening, save the file as CSV and try again.';
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Services\Import\UserSpreadsheetParser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -33,11 +34,41 @@ class SmokeTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->component('Devices/Index'));
     }
 
-    public function test_template_download_returns_a_spreadsheet(): void
+    /**
+     * The template is a CSV, not an XLSX: the bundled runtime PHP has no
+     * xmlwriter extension, so PhpSpreadsheet's Xlsx writer threw
+     * "Class \"XMLWriter\" not found" and this download 500'd in the packaged
+     * app (CI's PHP has xmlwriter, which is why it went unnoticed here).
+     */
+    public function test_template_download_returns_a_csv(): void
     {
         $response = $this->get('/template');
 
         $response->assertOk();
-        $this->assertStringContainsString('spreadsheet', $response->headers->get('content-type'));
+        $this->assertStringContainsString('text/csv', (string) $response->headers->get('content-type'));
+        $this->assertStringContainsString('zkteco-users-template.csv', (string) $response->headers->get('content-disposition'));
+        $this->assertStringContainsString('user_id,name,password,card_number,privilege', (string) $response->getContent());
+    }
+
+    /**
+     * Guards the regression directly: the template must not need any extension
+     * the packaged runtime lacks. Parsing our own template back must round-trip.
+     */
+    public function test_the_downloaded_template_can_be_imported_back(): void
+    {
+        $csv = (string) $this->get('/template')->getContent();
+
+        $path = tempnam(sys_get_temp_dir(), 'zk_tpl_').'.csv';
+        file_put_contents($path, $csv);
+
+        try {
+            $rows = (new UserSpreadsheetParser)->parse($path);
+
+            $this->assertCount(3, $rows);
+            $this->assertSame('Dana Cohen', $rows[0]->name);
+            $this->assertTrue($rows[0]->isValid());
+        } finally {
+            @unlink($path);
+        }
     }
 }
