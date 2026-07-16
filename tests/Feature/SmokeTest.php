@@ -27,6 +27,22 @@ class SmokeTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->component('Import/Index'));
     }
 
+    /**
+     * The window lands here first. NativePHP reveals the window on Electron's
+     * `did-finish-load`, which waits for every subresource — so this page must
+     * never pull the app bundle, or the window stays hidden until the whole
+     * bundle downloads (which is what made startup look frozen).
+     */
+    public function test_splash_page_is_bundle_free_and_hands_off_to_the_app(): void
+    {
+        $content = (string) $this->get('/splash')->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('app.tsx', $content);
+        $this->assertStringNotContainsString('@vite', $content);
+        $this->assertStringContainsString('app-splash', $content);
+        $this->assertStringContainsString('location.replace', $content);
+    }
+
     public function test_devices_page_renders(): void
     {
         $this->get('/devices')
