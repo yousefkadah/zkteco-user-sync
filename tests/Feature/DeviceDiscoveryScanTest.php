@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Exceptions\LocalNetworkBlockedException;
 use App\Models\Device;
 use App\Services\Zkteco\DeviceDiscoveryScanner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -38,5 +39,41 @@ class DeviceDiscoveryScanTest extends TestCase
         // New device: no name, so the suggestion falls back to the serial.
         $response->assertJsonPath('devices.1.already_added', false);
         $response->assertJsonPath('devices.1.suggested_name', 'ZKTeco BBB');
+    }
+
+    /**
+     * A blocked scan must not look like an empty network. macOS 15+ gates local
+     * network access behind TCC consent, and Linux sandboxes can deny the
+     * socket — in both cases the user needs to be told what to allow, otherwise
+     * the app just appears broken.
+     */
+    public function test_scan_reports_a_blocked_local_network_instead_of_an_empty_result(): void
+    {
+        $this->mock(DeviceDiscoveryScanner::class, function (MockInterface $mock) {
+            $mock->shouldReceive('scan')->once()->andThrow(new LocalNetworkBlockedException(1, 'Operation not permitted'));
+        });
+
+        $response = $this->getJson('/devices/scan');
+
+        $response->assertOk();
+        $response->assertJsonPath('blocked', true);
+        $response->assertJsonCount(0, 'devices');
+
+        // The message must be actionable, not a raw errno.
+        $message = (string) $response->json('message');
+        $this->assertNotSame('', $message);
+        $this->assertStringNotContainsString('Operation not permitted', $message);
+    }
+
+    public function test_the_blocked_hint_names_the_right_place_for_the_platform(): void
+    {
+        $hint = (new LocalNetworkBlockedException(1))->hint();
+
+        if (PHP_OS_FAMILY === 'Darwin') {
+            $this->assertStringContainsString('Privacy & Security', $hint);
+            $this->assertStringContainsString('Local Network', $hint);
+        } else {
+            $this->assertNotSame('', $hint);
+        }
     }
 }
