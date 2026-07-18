@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { Check, Loader2, Pencil, Plus, Trash2, Users, Wifi, X } from 'lucide-react';
+import { Check, Clock, Loader2, Pencil, Plus, Trash2, Users, Wifi, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -43,7 +43,20 @@ interface DiscoveredDevice {
     suggested_name: string;
 }
 
+interface DeviceTimeInfo {
+    deviceId: number;
+    deviceName: string;
+    deviceTime?: string | null;
+    localTime?: string;
+    /** Signed seconds; positive = device ahead of this computer. */
+    driftSeconds?: number | null;
+    error?: string;
+}
+
 const EMPTY_FORM: DeviceForm = { name: '', ip_address: '', port: 4370, comm_key: '', notes: '' };
+
+/** Past this, the clock is wrong enough to corrupt attendance rather than just look untidy. */
+const DRIFT_WARN_SECONDS = 60;
 
 export default function DevicesIndex({ devices }: Props) {
     const [open, setOpen] = useState(false);
@@ -56,6 +69,9 @@ export default function DevicesIndex({ devices }: Props) {
     const [scanned, setScanned] = useState(false);
     const [scanError, setScanError] = useState<string | null>(null);
     const [discovered, setDiscovered] = useState<DiscoveredDevice[]>([]);
+    const [timeCheckingId, setTimeCheckingId] = useState<number | null>(null);
+    const [timeSyncingId, setTimeSyncingId] = useState<number | null>(null);
+    const [timeInfo, setTimeInfo] = useState<DeviceTimeInfo | null>(null);
 
     const onlineCount = devices.filter((device) => device.last_connection_ok).length;
 
@@ -131,6 +147,59 @@ export default function DevicesIndex({ devices }: Props) {
             preserveScroll: true,
             onFinish: () => setTestingId(null),
         });
+    };
+
+    // Read the terminal's clock and show how far it has drifted. A device talking
+    // to an ADMS server does not keep its own time — it can silently sit on UTC and
+    // record every punch hours off, with nothing on screen to say so.
+    const checkTime = async (device: Device) => {
+        setTimeCheckingId(device.id);
+        setTimeInfo(null);
+
+        try {
+            const response = await fetch(`/devices/${device.id}/time`, {
+                headers: { Accept: 'application/json' },
+            });
+            const data = await response.json();
+
+            setTimeInfo(
+                data.ok
+                    ? {
+                          deviceId: device.id,
+                          deviceName: device.name,
+                          deviceTime: data.device_time,
+                          localTime: data.local_time,
+                          driftSeconds: data.drift_seconds,
+                      }
+                    : { deviceId: device.id, deviceName: device.name, error: data.error },
+            );
+        } catch {
+            setTimeInfo({ deviceId: device.id, deviceName: device.name, error: 'Could not reach the device.' });
+        } finally {
+            setTimeCheckingId(null);
+        }
+    };
+
+    const syncTime = (device: Device) => {
+        setTimeSyncingId(device.id);
+        router.post(`/devices/${device.id}/time`, {}, {
+            preserveScroll: true,
+            onFinish: () => {
+                setTimeSyncingId(null);
+                setTimeInfo(null);
+            },
+        });
+    };
+
+    // "3h 0m behind" reads better than a signed second count when you are trying to
+    // recognise a timezone-sized error at a glance.
+    const describeDrift = (seconds: number | null) => {
+        if (seconds === null) return 'unreadable';
+        const abs = Math.abs(seconds);
+        if (abs < 60) return abs === 0 ? 'in sync' : `${abs}s ${seconds > 0 ? 'ahead' : 'behind'}`;
+        const h = Math.floor(abs / 3600);
+        const m = Math.floor((abs % 3600) / 60);
+        return `${h ? `${h}h ` : ''}${m}m ${seconds > 0 ? 'ahead' : 'behind'}`;
     };
 
     const scan = async () => {
@@ -260,6 +329,58 @@ export default function DevicesIndex({ devices }: Props) {
                 </SubBar>
             )}
 
+            {timeInfo && (
+                <SubBar className="flex items-center justify-between gap-3">
+                    {timeInfo.error ? (
+                        <span className="text-[12px] text-danger">
+                            {timeInfo.deviceName}: {timeInfo.error}
+                        </span>
+                    ) : (
+                        <span className="text-[12px]">
+                            <span className="font-medium">{timeInfo.deviceName}</span>{' '}
+                            <span className="text-muted-foreground">
+                                device {timeInfo.deviceTime ?? '\u2014'} \u00b7 this computer {timeInfo.localTime}
+                            </span>{' '}
+                            <span
+                                className={cn(
+                                    'font-medium',
+                                    timeInfo.driftSeconds != null &&
+                                        Math.abs(timeInfo.driftSeconds) >= DRIFT_WARN_SECONDS
+                                        ? 'text-danger'
+                                        : 'text-success',
+                                )}
+                            >
+                                ({describeDrift(timeInfo.driftSeconds ?? null)})
+                            </span>
+                        </span>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                        {!timeInfo.error && (
+                            <Button
+                                size="sm"
+                                disabled={timeSyncingId === timeInfo.deviceId}
+                                onClick={() => {
+                                    const target = devices.find((d) => d.id === timeInfo.deviceId);
+                                    if (target) syncTime(target);
+                                }}
+                            >
+                                {timeSyncingId === timeInfo.deviceId ? (
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <ConnectingDots /> Setting
+                                    </span>
+                                ) : (
+                                    "Set to this computer's time"
+                                )}
+                            </Button>
+                        )}
+                        <Button variant="ghost" size="icon" onClick={() => setTimeInfo(null)} title="Dismiss">
+                            <X className="size-4" />
+                        </Button>
+                    </div>
+                </SubBar>
+            )}
+
             <PageScroll>
                 {devices.length === 0 ? (
                     <div className="flex h-full items-center justify-center p-10 text-center text-[13px] text-muted-foreground">
@@ -318,6 +439,23 @@ export default function DevicesIndex({ devices }: Props) {
                                                     </span>
                                                 ) : (
                                                     'Test'
+                                                )}
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                disabled={timeCheckingId === device.id}
+                                                onClick={() => checkTime(device)}
+                                                title="Check the device clock"
+                                            >
+                                                {timeCheckingId === device.id ? (
+                                                    <span className="inline-flex items-center gap-1.5">
+                                                        <ConnectingDots /> Time
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1.5">
+                                                        <Clock className="size-4" /> Time
+                                                    </span>
                                                 )}
                                             </Button>
                                             <Button

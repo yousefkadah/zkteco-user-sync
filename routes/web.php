@@ -42,6 +42,11 @@ Route::post('/devices', [DeviceController::class, 'store'])->name('devices.store
 Route::put('/devices/{device}', [DeviceController::class, 'update'])->name('devices.update');
 Route::delete('/devices/{device}', [DeviceController::class, 'destroy'])->name('devices.destroy');
 Route::post('/devices/{device}/test', [DeviceController::class, 'test'])->name('devices.test');
+// Device clock: read the drift, and set the device to this machine's local time.
+// A terminal talking to an ADMS server does not keep its own clock, so it can
+// silently sit on UTC and record every punch hours off.
+Route::get('/devices/{device}/time', [DeviceController::class, 'time'])->name('devices.time');
+Route::post('/devices/{device}/time', [DeviceController::class, 'syncTime'])->name('devices.time.sync');
 Route::get('/devices/{device}/users', [DeviceController::class, 'users'])->name('devices.users');
 Route::post('/devices/{device}/users', [DeviceController::class, 'storeDeviceUser'])->name('devices.users.store');
 Route::put('/devices/{device}/users/{uid}', [DeviceController::class, 'updateDeviceUser'])->name('devices.users.update');
