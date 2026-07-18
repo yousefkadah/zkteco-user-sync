@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Zkteco;
 
+use App\Exceptions\LocalNetworkBlockedException;
 use App\Models\Device;
 use App\Support\Ipv4Range;
 use CodingLibs\ZktecoPhp\Libs\Services\Util;
@@ -76,8 +77,29 @@ class DeviceDiscoveryScanner
 
         socket_set_nonblock($socket);
 
+        // Track whether ANY probe made it onto the wire. If every single send is
+        // refused with a permission error, the OS is blocking local networking
+        // (macOS 15+ TCC consent, or a Linux sandbox denial) rather than the
+        // network simply being empty — and the two must not look alike.
+        $sent = 0;
+        $lastError = 0;
+
         foreach ($hosts as $ip) {
-            @socket_sendto($socket, $packet, strlen($packet), 0, $ip, $port);
+            socket_clear_error($socket);
+
+            if (@socket_sendto($socket, $packet, strlen($packet), 0, $ip, $port) !== false) {
+                $sent++;
+
+                continue;
+            }
+
+            $lastError = socket_last_error($socket);
+        }
+
+        if ($sent === 0 && $this->isPermissionError($lastError)) {
+            socket_close($socket);
+
+            throw new LocalNetworkBlockedException($lastError, socket_strerror($lastError));
         }
 
         $found = [];
@@ -100,6 +122,27 @@ class DeviceDiscoveryScanner
         socket_close($socket);
 
         return array_keys($found);
+    }
+
+    /**
+     * Does this socket errno mean "the OS refused you", as opposed to an
+     * ordinary unreachable host? Sandboxes and macOS TCC surface the refusal as
+     * EPERM/EACCES; a host that simply isn't there gives EHOSTUNREACH/ENETUNREACH,
+     * which is a normal outcome of sweeping a subnet and must NOT be treated as
+     * a permission problem.
+     */
+    private function isPermissionError(int $code): bool
+    {
+        if ($code === 0) {
+            return false;
+        }
+
+        $permissionCodes = array_filter([
+            defined('SOCKET_EPERM') ? SOCKET_EPERM : null,
+            defined('SOCKET_EACCES') ? SOCKET_EACCES : null,
+        ]);
+
+        return in_array($code, $permissionCodes, true);
     }
 
     /**

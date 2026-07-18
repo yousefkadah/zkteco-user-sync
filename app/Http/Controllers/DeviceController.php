@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\LocalNetworkBlockedException;
 use App\Http\Requests\DeviceUserRequest;
 use App\Http\Requests\StoreDeviceRequest;
 use App\Http\Requests\UpdateDeviceRequest;
@@ -72,15 +73,29 @@ class DeviceController extends Controller
     {
         $known = Device::pluck('id', 'ip_address');
 
-        $devices = array_map(fn (array $found): array => [
-            'ip_address' => $found['ip'],
-            'serial_number' => $found['serial'],
-            'name' => $found['name'],
-            'firmware' => $found['firmware'],
-            'already_added' => $known->has($found['ip']),
-            'suggested_name' => $found['name']
-                ?: ($found['serial'] ? 'ZKTeco '.$found['serial'] : 'ZKTeco '.$found['ip']),
-        ], $scanner->scan());
+        try {
+            $found = $scanner->scan();
+        } catch (LocalNetworkBlockedException $e) {
+            // The OS refused local networking (macOS 15+ Local Network consent,
+            // or a Linux sandbox denial). Report it as such — an empty device
+            // list here would be indistinguishable from "no devices on this
+            // network" and leave the user nothing to act on.
+            return response()->json([
+                'devices' => [],
+                'blocked' => true,
+                'message' => $e->hint(),
+            ], 200);
+        }
+
+        $devices = array_map(fn (array $device): array => [
+            'ip_address' => $device['ip'],
+            'serial_number' => $device['serial'],
+            'name' => $device['name'],
+            'firmware' => $device['firmware'],
+            'already_added' => $known->has($device['ip']),
+            'suggested_name' => $device['name']
+                ?: ($device['serial'] ? 'ZKTeco '.$device['serial'] : 'ZKTeco '.$device['ip']),
+        ], $found);
 
         return response()->json(['devices' => $devices]);
     }

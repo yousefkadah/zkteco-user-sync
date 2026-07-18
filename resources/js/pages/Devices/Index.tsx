@@ -145,6 +145,17 @@ export default function DevicesIndex({ devices }: Props) {
             }
 
             const data = await response.json();
+
+            // The OS refused local networking (macOS 15+ Local Network consent,
+            // or a Linux sandbox denial). Show what to actually do about it —
+            // an empty list here would read as "no devices found".
+            if (data.blocked) {
+                setScanError(data.message ?? 'The system blocked local network access.');
+                setDiscovered([]);
+
+                return;
+            }
+
             setDiscovered(data.devices ?? []);
             setScanned(true);
         } catch {
