@@ -231,4 +231,91 @@ class FullnessConnectorTest extends TestCase
         Mockery::close();
         parent::tearDown();
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Refreshing the device list
+    |--------------------------------------------------------------------------
+    |
+    | For a device added, renamed, or newly assigned users in the CRM after this
+    | screen was opened — without making the operator disconnect and sign in again.
+    |
+    */
+
+    public function test_refresh_pulls_the_device_list_again_and_keeps_the_selection(): void
+    {
+        FullnessConnection::create([
+            'base_url' => 'https://fullness.co.il',
+            'token' => '1|secret-token',
+            'tenants' => [['id' => 't1', 'name' => 'Biz One']],
+            'tenant_id' => 't1',
+            'tenant_name' => 'Biz One',
+            'owner_email' => 'owner@biz.co.il',
+            'devices' => [['id' => 9, 'name' => 'Front Door', 'assigned_count' => 4]],
+            'fullness_device_id' => '9',
+            'fullness_device_name' => 'Front Door',
+        ]);
+
+        $client = Mockery::mock(FullnessClient::class);
+        // Renamed, gained users, and a second device appeared since last load.
+        $client->shouldReceive('devices')->once()->andReturn([
+            ['id' => 9, 'name' => 'Front Door (Lobby)', 'assigned_count' => 7],
+            ['id' => 10, 'name' => 'Back Door', 'assigned_count' => 2],
+        ]);
+        $this->instance(FullnessClient::class, $client);
+
+        $this->post('/connectors/devices/refresh')->assertRedirect();
+
+        $connection = FullnessConnection::current();
+        $this->assertCount(2, $connection->devices);
+        // Selection survives, and picks up the rename.
+        $this->assertSame('9', $connection->fullness_device_id);
+        $this->assertSame('Front Door (Lobby)', $connection->fullness_device_name);
+        $this->assertTrue($connection->isReady());
+    }
+
+    public function test_refresh_clears_the_selection_when_the_device_is_gone(): void
+    {
+        // Deliberately does NOT fall back to auto-selecting the remaining device:
+        // quietly pointing a sync at a different terminal is worse than asking.
+        FullnessConnection::create([
+            'base_url' => 'https://fullness.co.il',
+            'token' => '1|secret-token',
+            'tenants' => [['id' => 't1', 'name' => 'Biz One']],
+            'tenant_id' => 't1',
+            'tenant_name' => 'Biz One',
+            'owner_email' => 'owner@biz.co.il',
+            'devices' => [['id' => 9, 'name' => 'Front Door']],
+            'fullness_device_id' => '9',
+            'fullness_device_name' => 'Front Door',
+        ]);
+
+        $client = Mockery::mock(FullnessClient::class);
+        $client->shouldReceive('devices')->once()->andReturn([
+            ['id' => 10, 'name' => 'Back Door', 'assigned_count' => 2],
+        ]);
+        $this->instance(FullnessClient::class, $client);
+
+        $this->post('/connectors/devices/refresh')
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $connection = FullnessConnection::current();
+        $this->assertNull($connection->fullness_device_id);
+        $this->assertFalse($connection->isReady());
+    }
+
+    public function test_refresh_requires_a_selected_business(): void
+    {
+        FullnessConnection::create([
+            'base_url' => 'https://fullness.co.il',
+            'token' => '1|secret-token',
+            'tenants' => [['id' => 't1', 'name' => 'Biz One'], ['id' => 't2', 'name' => 'Biz Two']],
+            'owner_email' => 'owner@biz.co.il',
+        ]);
+
+        $this->post('/connectors/devices/refresh')
+            ->assertRedirect()
+            ->assertSessionHas('error');
+    }
 }

@@ -24,6 +24,9 @@ Route::get('/connectors', [FullnessConnectionController::class, 'index'])->name(
 Route::post('/connectors/connect', [FullnessConnectionController::class, 'connect'])->name('connectors.connect');
 Route::post('/connectors/tenant', [FullnessConnectionController::class, 'selectTenant'])->name('connectors.tenant');
 Route::post('/connectors/device', [FullnessConnectionController::class, 'selectDevice'])->name('connectors.device');
+// Re-pull the device list (a device added/renamed in the CRM after this screen
+// was opened) without disconnecting and signing in again.
+Route::post('/connectors/devices/refresh', [FullnessConnectionController::class, 'refreshDevices'])->name('connectors.devices.refresh');
 Route::post('/connectors/fetch', [FullnessConnectionController::class, 'fetch'])->name('connectors.fetch');
 Route::delete('/connectors', [FullnessConnectionController::class, 'disconnect'])->name('connectors.disconnect');
 Route::get('/import', [ImportController::class, 'index'])->name('import.index');
