@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { Building2, Check, DownloadCloud, Loader2, Monitor, Plug, ShieldCheck, Unplug } from 'lucide-react';
+import { Building2, Check, DownloadCloud, Loader2, Monitor, Plug, RefreshCw, ShieldCheck, Unplug } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,6 +58,7 @@ export default function ConnectorsIndex({ connection, tenants, devices, defaultB
     const [processing, setProcessing] = useState(false);
     const [selectingId, setSelectingId] = useState<string | null>(null);
     const [selectingDeviceId, setSelectingDeviceId] = useState<string | null>(null);
+    const [refreshingDevices, setRefreshingDevices] = useState(false);
     const [changingTenant, setChangingTenant] = useState(false);
     const [fetching, setFetching] = useState(false);
 
@@ -117,6 +118,24 @@ export default function ConnectorsIndex({ connection, tenants, devices, defaultB
                 preserveScroll: true,
                 onStart: () => setSelectingDeviceId(String(device.id)),
                 onFinish: () => setSelectingDeviceId(null),
+            },
+        );
+    };
+
+    // Re-pull the device list: a device added, renamed, or newly assigned users in
+    // the CRM after this screen was opened. The current selection survives.
+    const refreshDevices = () => {
+        router.post(
+            '/connectors/devices/refresh',
+            {},
+            {
+                preserveScroll: true,
+                // Without this Inertia remounts the page on POST, resetting local
+                // state — which closes this dialog. Refreshing the list only to be
+                // thrown out of the picker would make the button pointless.
+                preserveState: true,
+                onStart: () => setRefreshingDevices(true),
+                onFinish: () => setRefreshingDevices(false),
             },
         );
     };
@@ -333,7 +352,19 @@ export default function ConnectorsIndex({ connection, tenants, devices, defaultB
                                 )}
                             </div>
 
-                            <p className="text-[12px] font-medium">Choose the device to sync</p>
+                            <div className="flex items-center justify-between gap-2">
+                                <p className="text-[12px] font-medium">Choose the device to sync</p>
+                                <button
+                                    type="button"
+                                    onClick={refreshDevices}
+                                    disabled={refreshingDevices || selectingDeviceId !== null}
+                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-accent-brand hover:underline disabled:opacity-60"
+                                    title="Re-pull the device list from Fullness"
+                                >
+                                    <RefreshCw className={cn('size-3', refreshingDevices && 'animate-spin')} />
+                                    {refreshingDevices ? 'Refreshing' : 'Refresh'}
+                                </button>
+                            </div>
                             <div className="space-y-1.5">
                                 {devices.map((device) => {
                                     const active = String(device.id) === connection?.fullness_device_id;

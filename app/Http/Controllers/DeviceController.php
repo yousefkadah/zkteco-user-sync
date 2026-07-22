@@ -85,6 +85,28 @@ class DeviceController extends Controller
         return response()->json(['devices' => $devices]);
     }
 
+    /**
+     * Report the device clock and its drift from this machine, so a device that has
+     * silently drifted (typically onto UTC via an ADMS server) is visible rather
+     * than showing up later as attendance records recorded hours off.
+     */
+    public function time(Device $device, ZktecoDeviceService $service): JsonResponse
+    {
+        return response()->json($service->readTime($device));
+    }
+
+    /**
+     * Set the device clock to this machine's local time.
+     */
+    public function syncTime(Device $device, ZktecoDeviceService $service): RedirectResponse
+    {
+        $result = $service->syncTime($device);
+
+        return $result['ok']
+            ? back()->with('success', 'Device time set to '.($result['device_time'] ?? now()->format('Y-m-d H:i:s')).'.')
+            : back()->with('error', 'Could not set the time: '.($result['error'] ?? 'unknown error'));
+    }
+
     public function users(Device $device, ZktecoDeviceService $service): Response
     {
         return Inertia::render('Devices/Users', [

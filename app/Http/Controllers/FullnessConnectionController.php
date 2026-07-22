@@ -155,6 +155,40 @@ class FullnessConnectionController extends Controller
         return back()->with('success', "Device set to “{$device['name']}”.");
     }
 
+    /**
+     * Re-pull the tenant's device list from Fullness.
+     *
+     * For when a device is added, renamed, or has users assigned in the CRM after
+     * this screen was opened — without making the operator disconnect and sign in
+     * again. The current selection survives the refresh.
+     */
+    public function refreshDevices(): RedirectResponse
+    {
+        $connection = FullnessConnection::current();
+        if (! $connection || ! $connection->hasTenant()) {
+            return back()->with('error', 'Choose a business first.');
+        }
+
+        $previousId = (string) ($connection->fullness_device_id ?? '');
+
+        if ($error = $this->loadTenantDevices($connection, preserveSelection: true)) {
+            return back()->with('error', $error);
+        }
+
+        $connection->refresh();
+
+        $count = count($connection->devices ?? []);
+
+        // The device that was selected is gone from Fullness. Say so plainly —
+        // silently continuing with nothing selected invites a confusing "choose a
+        // device first" error at fetch time.
+        if ($previousId !== '' && $connection->fullness_device_id === null) {
+            return back()->with('error', 'The device you had selected is no longer in Fullness. Choose another one.');
+        }
+
+        return back()->with('success', 'Device list refreshed — '.$count.' device'.($count === 1 ? '' : 's').'.');
+    }
+
     public function fetch(ImportedUserValidator $validator): RedirectResponse
     {
         $connection = FullnessConnection::current();
@@ -214,7 +248,7 @@ class FullnessConnectionController extends Controller
      * user-facing error message on failure, or null on success (including the
      * "no devices" case, which the UI handles).
      */
-    private function loadTenantDevices(FullnessConnection $connection): ?string
+    private function loadTenantDevices(FullnessConnection $connection, bool $preserveSelection = false): ?string
     {
         try {
             $devices = $this->client->devices($connection);
@@ -222,7 +256,15 @@ class FullnessConnectionController extends Controller
             return $e->getMessage();
         }
 
-        $selected = count($devices) === 1 ? $devices[0] : null;
+        $currentId = $preserveSelection ? (string) ($connection->fullness_device_id ?? '') : '';
+
+        $selected = $currentId !== ''
+            // Refreshing: keep the operator's choice (picking up a rename or a new
+            // assigned-user count). If it has vanished, select NOTHING rather than
+            // falling back to auto-select — quietly pointing a sync at a different
+            // terminal is worse than asking the operator to choose again.
+            ? collect($devices)->first(fn ($d) => is_array($d) && (string) ($d['id'] ?? '') === $currentId)
+            : (count($devices) === 1 ? $devices[0] : null);
 
         $connection->update([
             'devices' => $devices,

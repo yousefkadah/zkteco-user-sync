@@ -24,6 +24,9 @@ Route::get('/connectors', [FullnessConnectionController::class, 'index'])->name(
 Route::post('/connectors/connect', [FullnessConnectionController::class, 'connect'])->name('connectors.connect');
 Route::post('/connectors/tenant', [FullnessConnectionController::class, 'selectTenant'])->name('connectors.tenant');
 Route::post('/connectors/device', [FullnessConnectionController::class, 'selectDevice'])->name('connectors.device');
+// Re-pull the device list (a device added/renamed in the CRM after this screen
+// was opened) without disconnecting and signing in again.
+Route::post('/connectors/devices/refresh', [FullnessConnectionController::class, 'refreshDevices'])->name('connectors.devices.refresh');
 Route::post('/connectors/fetch', [FullnessConnectionController::class, 'fetch'])->name('connectors.fetch');
 Route::delete('/connectors', [FullnessConnectionController::class, 'disconnect'])->name('connectors.disconnect');
 Route::get('/import', [ImportController::class, 'index'])->name('import.index');
@@ -42,6 +45,11 @@ Route::post('/devices', [DeviceController::class, 'store'])->name('devices.store
 Route::put('/devices/{device}', [DeviceController::class, 'update'])->name('devices.update');
 Route::delete('/devices/{device}', [DeviceController::class, 'destroy'])->name('devices.destroy');
 Route::post('/devices/{device}/test', [DeviceController::class, 'test'])->name('devices.test');
+// Device clock: read the drift, and set the device to this machine's local time.
+// A terminal talking to an ADMS server does not keep its own clock, so it can
+// silently sit on UTC and record every punch hours off.
+Route::get('/devices/{device}/time', [DeviceController::class, 'time'])->name('devices.time');
+Route::post('/devices/{device}/time', [DeviceController::class, 'syncTime'])->name('devices.time.sync');
 Route::get('/devices/{device}/users', [DeviceController::class, 'users'])->name('devices.users');
 Route::post('/devices/{device}/users', [DeviceController::class, 'storeDeviceUser'])->name('devices.users.store');
 Route::put('/devices/{device}/users/{uid}', [DeviceController::class, 'updateDeviceUser'])->name('devices.users.update');

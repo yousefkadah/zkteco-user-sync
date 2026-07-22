@@ -34,6 +34,12 @@ class FakeZkteco extends ZKTeco
 
     public bool $disabled = false;
 
+    /** Device clock, as the terminal would report it ("Y-m-d H:i:s"). */
+    public ?string $deviceTime = null;
+
+    /** Set false to emulate firmware that accepts the command but keeps its clock. */
+    public bool $acceptTimeWrite = true;
+
     public function __construct()
     {
         // Intentionally does not call parent::__construct — no real UDP socket.
@@ -111,5 +117,21 @@ class FakeZkteco extends ZKTeco
     public function version()
     {
         return '1.0.0';
+    }
+
+    public function getTime()
+    {
+        return $this->deviceTime ?? false;
+    }
+
+    public function setTime($t)
+    {
+        if (! $this->acceptTimeWrite) {
+            return false;
+        }
+
+        $this->deviceTime = $t;
+
+        return true;
     }
 }
