@@ -9,6 +9,7 @@ use App\Models\ImportBatch;
 use App\Models\ImportedUser;
 use CodingLibs\ZktecoPhp\Libs\Services\Util;
 use CodingLibs\ZktecoPhp\Libs\ZKTeco;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Throwable;
 
@@ -21,6 +22,100 @@ class ZktecoDeviceService
      *
      * @return array{ok: bool, error?: string, serial?: ?string, name?: ?string, firmware?: ?string, users?: ?int}
      */
+    /**
+     * Read the device's clock and report how far it has drifted from this machine.
+     *
+     * Worth surfacing because a ZKTeco terminal does not keep its own time once it
+     * talks to an ADMS server: it derives the clock from the server's HTTP `Date:`
+     * header (GMT) plus whatever timezone offset the server advertises. If the
+     * server advertises none, the device applies 0, lands on UTC and silently
+     * records every punch hours off — 3h in an Israeli summer, 2h in winter. The
+     * drift below is what makes that visible instead of a mystery.
+     *
+     * @return array{ok: bool, device_time?: ?string, local_time?: string, drift_seconds?: ?int, error?: string}
+     */
+    public function readTime(Device $device): array
+    {
+        $zk = $this->factory->make($device);
+
+        try {
+            if (! $zk->connect()) {
+                return ['ok' => false, 'error' => 'Could not connect. Check the IP, port and that the device is on the same network.'];
+            }
+
+            $deviceTime = $this->stringify($zk->getTime());
+            $localTime = now()->format('Y-m-d H:i:s');
+
+            return [
+                'ok' => true,
+                'device_time' => $deviceTime,
+                'local_time' => $localTime,
+                'drift_seconds' => $this->driftSeconds($deviceTime, $localTime),
+            ];
+        } catch (Throwable $e) {
+            return ['ok' => false, 'error' => $this->describeError($e)];
+        } finally {
+            $this->safe(fn () => $zk->disconnect());
+        }
+    }
+
+    /**
+     * Set the device's clock to this machine's current local time.
+     *
+     * The device stores wall-clock with no offset, and the library's setTime()
+     * takes a local "Y-m-d H:i:s" string — so we deliberately send local time, NOT
+     * UTC. Sending UTC here would recreate the exact bug this fixes.
+     *
+     * @return array{ok: bool, device_time?: ?string, error?: string}
+     */
+    public function syncTime(Device $device): array
+    {
+        $zk = $this->factory->make($device);
+
+        try {
+            if (! $zk->connect()) {
+                return ['ok' => false, 'error' => 'Could not connect. Check the IP, port and that the device is on the same network.'];
+            }
+
+            $target = now()->format('Y-m-d H:i:s');
+
+            if ($zk->setTime($target) === false) {
+                return ['ok' => false, 'error' => 'The device refused the new time.'];
+            }
+
+            // Read it back rather than trusting the write: some firmware accepts the
+            // command and keeps its own clock, which would otherwise look like success.
+            return ['ok' => true, 'device_time' => $this->stringify($zk->getTime()) ?? $target];
+        } catch (Throwable $e) {
+            return ['ok' => false, 'error' => $this->describeError($e)];
+        } finally {
+            $this->safe(fn () => $zk->disconnect());
+        }
+    }
+
+    /**
+     * Signed drift in seconds (positive = device ahead of this machine), or null
+     * when the device time is unreadable/unparseable.
+     */
+    private function driftSeconds(?string $deviceTime, string $localTime): ?int
+    {
+        if ($deviceTime === null) {
+            return null;
+        }
+
+        try {
+            // diffInSeconds returns a float; this method is declared ?int and the
+            // file is strict_types, so cast explicitly rather than letting a
+            // TypeError get swallowed by the catch below and reported as "unknown".
+            $seconds = Carbon::parse($deviceTime)
+                ->diffInSeconds(Carbon::parse($localTime), false);
+
+            return (int) -$seconds;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
     public function testConnection(Device $device): array
     {
         $zk = $this->factory->make($device);
